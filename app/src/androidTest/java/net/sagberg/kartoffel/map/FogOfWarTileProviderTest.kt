@@ -24,6 +24,7 @@ class FogOfWarTileProviderTest {
             y = tile.y,
             zoom = tile.zoom,
         )
+            ?: error("Expected Fog of War provider to return a tile")
         val renderedTileData = renderedTile.data
             ?: error("Expected Fog of War provider to return PNG tile bytes")
         val bitmap = BitmapFactory.decodeByteArray(
