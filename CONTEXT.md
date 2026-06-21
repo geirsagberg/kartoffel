@@ -91,3 +91,5 @@ _Avoid_: Precision profile, sampling configuration
 **Tracking Diagnostics**:
 A hidden or secondary view of how location evidence becomes street-level coverage, used to tune battery use and coverage detail without cluttering the main experience.
 _Avoid_: Debug screen, logs
+
+For MVP UI copy, prefer mostly inline strings over Android string resources when the text is simple and local to one screen, to keep implementation friction low.
