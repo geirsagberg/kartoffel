@@ -1,0 +1,58 @@
+# macOS
+.DS_Store
+
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Kotlin / Android build caches
+.kotlin/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio / IntelliJ user state
+*.iml
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf/
+.idea/dictionaries/
+.idea/httpRequests/
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# Local Android configuration
+local.properties
+secrets.properties
+maps.properties
+api-keys.properties
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Signing keys and certificates
+*.jks
+*.keystore
+*.p12
+*.pem
+
+# Android artifacts
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+captures/
+
+# Logs and diagnostics
+*.log
+*.hprof
+
+# Test output
+test-results/
