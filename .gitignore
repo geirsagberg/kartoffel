@@ -13,17 +13,8 @@ build/
 .cxx/
 
 # Android Studio / IntelliJ user state
+.idea/
 *.iml
-.idea/caches/
-.idea/libraries/
-.idea/modules.xml
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/shelf/
-.idea/dictionaries/
-.idea/httpRequests/
-.idea/navEditor.xml
-.idea/assetWizardSettings.xml
 
 # Local Android configuration
 local.properties
