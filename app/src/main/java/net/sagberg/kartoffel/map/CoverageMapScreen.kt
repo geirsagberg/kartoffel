@@ -87,6 +87,14 @@ internal fun CoverageMapScreen() {
     val fogTileProvider = remember(seededCoverageSnapshot.revision) {
         FogOfWarTileProvider(seededCoverageSnapshot)
     }
+    var hasObservedInitialFogRevision by remember { mutableStateOf(false) }
+
+    LaunchedEffect(seededCoverageSnapshot.revision) {
+        if (hasObservedInitialFogRevision) {
+            fogTileOverlayState.clearTileCache()
+        }
+        hasObservedInitialFogRevision = true
+    }
 
     fun moveToCurrentLocation(zoom: Float) {
         if (!hasLocationPermission) return
