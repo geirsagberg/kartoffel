@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -99,19 +103,36 @@ internal fun CoverageMapScreen() {
             }
     }
 
-    LaunchedEffect(hasLocationPermission) {
-        if (shouldRequestFirstLocationFix(hasLocationPermission, centeredOnFirstFix)) {
-            val cancellationTokenSource = CancellationTokenSource()
-            fusedLocationClient
-                .getCurrentLocation(
-                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                    cancellationTokenSource.token,
-                )
-                .addOnSuccessListener { location ->
-                    if (location != null) {
-                        firstFix = MapCoordinate(location.latitude, location.longitude)
-                    }
+    DisposableEffect(hasLocationPermission, centeredOnFirstFix, context, fusedLocationClient) {
+        if (!shouldRequestFirstLocationFix(hasLocationPermission, centeredOnFirstFix)) {
+            onDispose {}
+        } else {
+            val locationCallback = object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult) {
+                    val location = locationResult.lastLocation
+                        ?: locationResult.locations.firstOrNull()
+                        ?: return
+
+                    firstFix = MapCoordinate(location.latitude, location.longitude)
+                    fusedLocationClient.removeLocationUpdates(this)
                 }
+            }
+            val locationRequest = LocationRequest.Builder(
+                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                1_000L,
+            )
+                .setMinUpdateIntervalMillis(500L)
+                .build()
+
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                context.mainLooper,
+            )
+
+            onDispose {
+                fusedLocationClient.removeLocationUpdates(locationCallback)
+            }
         }
     }
 
