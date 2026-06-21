@@ -8,8 +8,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -51,9 +51,12 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.TileOverlay
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberTileOverlayState
 import kotlinx.coroutines.launch
 import net.sagberg.kartoffel.R
+import net.sagberg.kartoffel.coverage.SeededCoverageCells
 
 @Composable
 @SuppressLint("MissingPermission")
@@ -78,6 +81,11 @@ internal fun CoverageMapScreen() {
     val fallbackCameraTarget = remember { LatLng(59.9139, 10.7522) }
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(fallbackCameraTarget, 12f)
+    }
+    val seededCoverageSnapshot = SeededCoverageCells.snapshot()
+    val fogTileOverlayState = rememberTileOverlayState()
+    val fogTileProvider = remember(seededCoverageSnapshot.revision) {
+        FogOfWarTileProvider(seededCoverageSnapshot)
     }
 
     fun moveToCurrentLocation(zoom: Float) {
@@ -166,7 +174,16 @@ internal fun CoverageMapScreen() {
                     myLocationButtonEnabled = false,
                     zoomControlsEnabled = false,
                 )
-            )
+            ) {
+                TileOverlay(
+                    tileProvider = fogTileProvider,
+                    state = fogTileOverlayState,
+                    fadeIn = false,
+                    transparency = 0f,
+                    visible = true,
+                    zIndex = 10f,
+                )
+            }
         },
     )
 }
