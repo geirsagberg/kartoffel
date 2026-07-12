@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 val localProperties = Properties().apply {
@@ -43,6 +44,10 @@ kotlin {
     }
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -54,6 +59,10 @@ dependencies {
     implementation(files("libs/h3-android-4.4.0-kartoffel.1.aar"))
     implementation(libs.play.services.location)
     implementation(libs.play.services.maps)
+    implementation(libs.room3.runtime)
+    implementation(libs.sqlite.framework)
+
+    ksp(libs.room3.compiler)
 
     testImplementation(libs.junit)
     testImplementation(libs.h3.jvm)
@@ -63,6 +72,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.room3.testing)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
