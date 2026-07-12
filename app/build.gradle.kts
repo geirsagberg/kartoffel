@@ -51,10 +51,12 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.google.maps.compose)
+    implementation(files("libs/h3-android-4.4.0-kartoffel.1.aar"))
     implementation(libs.play.services.location)
     implementation(libs.play.services.maps)
 
     testImplementation(libs.junit)
+    testImplementation(libs.h3.jvm)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
