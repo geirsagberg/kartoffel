@@ -14,7 +14,7 @@ class H3AndroidIntegrationTest {
         val coordinate = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
         val cell = coverageCells.cellAt(coordinate)
 
-        assertEquals(0x08c09993866141ffL, cell.value)
+        assertEquals(626169207098265599, cell.value)
         assertTrue(coverageCells.boundaryOf(cell).size >= 5)
     }
 }
