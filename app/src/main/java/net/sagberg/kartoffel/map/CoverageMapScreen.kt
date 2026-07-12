@@ -6,23 +6,27 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -203,75 +207,106 @@ internal fun CoverageMapContent(
     onCenterCurrentLocation: () -> Unit,
     map: @Composable BoxScope.() -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag("coverage_map_screen"),
-    ) {
-        map()
-
-        Row(
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            CoverageMapTopAppBar()
+        },
+    ) { contentPadding ->
+        Box(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .fillMaxSize()
+                .padding(contentPadding)
+                .testTag("coverage_map_screen"),
         ) {
-            FilledTonalButton(
-                modifier = Modifier.testTag("passive_tracking_status"),
-                onClick = {},
-            ) {
-                Text("Passive off")
+            map()
+
+            if (hasLocationPermission) {
+                FloatingActionButton(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 16.dp, bottom = 24.dp)
+                        .size(48.dp),
+                    onClick = onCenterCurrentLocation,
+                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 6.dp,
+                        pressedElevation = 8.dp,
+                    ),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_my_location_24),
+                        contentDescription = "Center on current location",
+                    )
+                }
             }
+
+            if (!hasLocationPermission) {
+                Button(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(24.dp),
+                    onClick = onRequestLocationPermission,
+                ) {
+                    Text("Enable location")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CoverageMapTopAppBar() {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    TopAppBar(
+        title = {
+            Column {
+                Text("Kartoffel")
+                Text(
+                    modifier = Modifier.testTag("passive_tracking_status"),
+                    text = "Passive off",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        actions = {
             Button(
                 modifier = Modifier.testTag("recording_session_control"),
                 onClick = {},
             ) {
                 Text("Start")
             }
-            FilledTonalButton(
+            IconButton(
                 modifier = Modifier.testTag("settings_diagnostics_menu"),
-                onClick = {},
-            ) {
-                Text("Menu")
-            }
-        }
-
-        if (hasLocationPermission) {
-            FloatingActionButton(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 16.dp, bottom = 24.dp)
-                    .size(48.dp),
-                onClick = onCenterCurrentLocation,
-                shape = CircleShape,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = 6.dp,
-                    pressedElevation = 8.dp,
-                ),
+                onClick = { menuExpanded = true },
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_my_location_24),
-                    contentDescription = "Center on current location",
+                    painter = painterResource(R.drawable.ic_more_vert_24),
+                    contentDescription = "More options",
                 )
             }
-        }
-
-        if (!hasLocationPermission) {
-            Button(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(24.dp),
-                onClick = onRequestLocationPermission,
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
             ) {
-                Text("Enable location")
+                DropdownMenuItem(
+                    text = { Text("Settings") },
+                    onClick = { menuExpanded = false },
+                )
+                DropdownMenuItem(
+                    text = { Text("Tracking diagnostics") },
+                    onClick = { menuExpanded = false },
+                )
             }
-        }
-    }
+        },
+    )
 }
 
 private fun Context.hasForegroundLocationPermission(): Boolean =

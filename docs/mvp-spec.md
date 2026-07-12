@@ -8,7 +8,7 @@ The product language and principles live in [`CONTEXT.md`](../CONTEXT.md). Archi
 
 ## Experience
 
-Kartoffel opens to a full-screen Coverage Map that centers when location becomes available. Fog of War hides unvisited Coverage Cells. The main map offers a quiet Passive Tracking toggle and a start/stop Recording Session control; settings and Tracking Diagnostics stay secondary.
+Kartoffel opens to a Coverage Map that centers when location becomes available. Fog of War hides unvisited Coverage Cells. A compact app bar keeps Passive Tracking status and the start/stop Recording Session control visible; settings and Tracking Diagnostics stay in its overflow menu. The map retains an edge-to-edge current-location control.
 
 Permissions are requested in context: foreground location for map/session use, and background location plus any required notification/foreground-service permissions when Passive Tracking is enabled.
 

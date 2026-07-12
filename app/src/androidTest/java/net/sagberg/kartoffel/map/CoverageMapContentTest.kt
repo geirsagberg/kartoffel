@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import org.junit.Rule
 import org.junit.Test
 
@@ -38,6 +39,16 @@ class CoverageMapContentTest {
 
         compose.onAllNodesWithText("Enable location").assertCountEquals(0)
         compose.onNodeWithContentDescription("Center on current location").assertIsDisplayed()
+    }
+
+    @Test
+    fun secondaryActionsAreAvailableFromTheOverflowMenu() {
+        compose.setCoverageMapContent(hasLocationPermission = true)
+
+        compose.onNodeWithContentDescription("More options").performClick()
+
+        compose.onNodeWithText("Settings").assertIsDisplayed()
+        compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setCoverageMapContent(
