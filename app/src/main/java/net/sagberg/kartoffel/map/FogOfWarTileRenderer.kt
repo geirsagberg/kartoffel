@@ -8,14 +8,14 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import java.io.ByteArrayOutputStream
-import net.sagberg.kartoffel.coverage.SeedCoverageCell
+import net.sagberg.kartoffel.coverage.CoverageCellShape
 
 internal class FogOfWarTileRenderer(
     private val fogColor: Int = Color.argb(185, 24, 29, 36),
 ) {
     fun renderPng(
         tile: FogTileCoordinate,
-        cellsToClear: List<SeedCoverageCell>,
+        cellsToClear: List<CoverageCellShape>,
     ): ByteArray {
         val bitmap = Bitmap.createBitmap(
             FOG_TILE_SIZE,
@@ -43,7 +43,7 @@ internal class FogOfWarTileRenderer(
         }
     }
 
-    private fun SeedCoverageCell.toTilePath(tile: FogTileCoordinate): Path {
+    private fun CoverageCellShape.toTilePath(tile: FogTileCoordinate): Path {
         val first = tile.pixelForCoordinate(boundary.first())
 
         return Path().apply {

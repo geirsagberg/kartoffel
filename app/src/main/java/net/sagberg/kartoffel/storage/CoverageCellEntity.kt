@@ -25,6 +25,7 @@ internal data class CoverageCellEntity(
 internal enum class CoverageEvidenceSource(val bit: Int) {
     PASSIVE_TRACKING(1),
     RECORDING_SESSION(2),
+    FOREGROUND_FIX(4),
 }
 
 internal fun evidenceMaskOf(vararg sources: CoverageEvidenceSource): Int =

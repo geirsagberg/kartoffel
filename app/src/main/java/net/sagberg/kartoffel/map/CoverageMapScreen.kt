@@ -60,7 +60,12 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberTileOverlayState
 import kotlinx.coroutines.launch
 import net.sagberg.kartoffel.R
-import net.sagberg.kartoffel.coverage.SeededCoverageCells
+import net.sagberg.kartoffel.coverage.CoverageSnapshot
+import net.sagberg.kartoffel.coverage.ForegroundCoverageRecorder
+import net.sagberg.kartoffel.coverage.ForegroundLocationFix
+import net.sagberg.kartoffel.coverage.GeoCoordinate
+import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
+import net.sagberg.kartoffel.storage.KartoffelDatabase
 
 @Composable
 @SuppressLint("MissingPermission")
@@ -70,11 +75,23 @@ internal fun CoverageMapScreen() {
     val fusedLocationClient = remember(context) {
         LocationServices.getFusedLocationProviderClient(context)
     }
+    val database = remember(context) { KartoffelDatabase.open(context) }
+    val coverageRecorder = remember(database) { ForegroundCoverageRecorder(database) }
+    val persistedCoverage = remember(database) {
+        PersistedCoverageLoader(database.coverageCells())
+    }
     var hasLocationPermission by remember {
         mutableStateOf(context.hasForegroundLocationPermission())
     }
     var firstFix by remember { mutableStateOf<MapCoordinate?>(null) }
+    var acceptedForegroundFix by remember { mutableStateOf(false) }
+    var recordingForegroundFix by remember { mutableStateOf(false) }
     var centeredOnFirstFix by rememberSaveable { mutableStateOf(false) }
+    var coverageSnapshot by remember { mutableStateOf(CoverageSnapshot.Empty) }
+
+    DisposableEffect(database) {
+        onDispose { database.close() }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -86,14 +103,17 @@ internal fun CoverageMapScreen() {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(fallbackCameraTarget, 12f)
     }
-    val seededCoverageSnapshot = SeededCoverageCells.snapshot()
     val fogTileOverlayState = rememberTileOverlayState()
-    val fogTileProvider = remember(seededCoverageSnapshot.revision) {
-        FogOfWarTileProvider(seededCoverageSnapshot)
+    val fogTileProvider = remember(coverageSnapshot.revision) {
+        FogOfWarTileProvider(coverageSnapshot)
     }
     var hasObservedInitialFogRevision by remember { mutableStateOf(false) }
 
-    LaunchedEffect(seededCoverageSnapshot.revision) {
+    LaunchedEffect(persistedCoverage) {
+        coverageSnapshot = persistedCoverage.load(revision = coverageSnapshot.revision + 1)
+    }
+
+    LaunchedEffect(coverageSnapshot.revision) {
         if (hasObservedInitialFogRevision) {
             fogTileOverlayState.clearTileCache()
         }
@@ -123,8 +143,8 @@ internal fun CoverageMapScreen() {
             }
     }
 
-    DisposableEffect(hasLocationPermission, centeredOnFirstFix, context, fusedLocationClient) {
-        if (!shouldRequestFirstLocationFix(hasLocationPermission, centeredOnFirstFix)) {
+    DisposableEffect(hasLocationPermission, acceptedForegroundFix, context, fusedLocationClient) {
+        if (!shouldRequestForegroundLocation(hasLocationPermission, acceptedForegroundFix)) {
             onDispose {}
         } else {
             val locationCallback = object : LocationCallback() {
@@ -132,16 +152,42 @@ internal fun CoverageMapScreen() {
                     val location = locationResult.lastLocation
                         ?: locationResult.locations.firstOrNull()
                         ?: return
+                    if (recordingForegroundFix) return
 
-                    firstFix = MapCoordinate(location.latitude, location.longitude)
-                    fusedLocationClient.removeLocationUpdates(this)
+                    if (firstFix == null) {
+                        firstFix = MapCoordinate(location.latitude, location.longitude)
+                    }
+                    val callback = this
+                    recordingForegroundFix = true
+                    scope.launch {
+                        val decision = coverageRecorder.record(
+                            ForegroundLocationFix(
+                                coordinate = GeoCoordinate(location.latitude, location.longitude),
+                                capturedAtMillis = location.time,
+                                accuracyMeters = if (location.hasAccuracy()) {
+                                    location.accuracy.toDouble()
+                                } else {
+                                    Double.MAX_VALUE
+                                },
+                            ),
+                        )
+                        if (decision.accepted) {
+                            acceptedForegroundFix = true
+                            coverageSnapshot = persistedCoverage.load(
+                                revision = coverageSnapshot.revision + 1,
+                            )
+                            fusedLocationClient.removeLocationUpdates(callback)
+                        }
+                        recordingForegroundFix = false
+                    }
                 }
             }
             val locationRequest = LocationRequest.Builder(
-                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                Priority.PRIORITY_HIGH_ACCURACY,
                 1_000L,
             )
                 .setMinUpdateIntervalMillis(500L)
+                .setMaxUpdateAgeMillis(0L)
                 .build()
 
             fusedLocationClient.requestLocationUpdates(

@@ -2,10 +2,10 @@ package net.sagberg.kartoffel.map
 
 import com.google.android.gms.maps.model.Tile
 import com.google.android.gms.maps.model.TileProvider
-import net.sagberg.kartoffel.coverage.SeedCoverageSnapshot
+import net.sagberg.kartoffel.coverage.CoverageSnapshot
 
 internal class FogOfWarTileProvider(
-    private val coverageSnapshot: SeedCoverageSnapshot,
+    private val coverageSnapshot: CoverageSnapshot,
     private val renderer: FogOfWarTileRenderer = FogOfWarTileRenderer(),
 ) : TileProvider {
     override fun getTile(

@@ -13,10 +13,10 @@ internal data class MapCameraRequest(
     val zoom: Float,
 )
 
-internal fun shouldRequestFirstLocationFix(
+internal fun shouldRequestForegroundLocation(
     hasLocationPermission: Boolean,
-    centeredOnFirstFix: Boolean,
-): Boolean = hasLocationPermission && !centeredOnFirstFix
+    acceptedForegroundFix: Boolean,
+): Boolean = hasLocationPermission && !acceptedForegroundFix
 
 internal fun firstFixCameraRequest(
     firstFix: MapCoordinate?,

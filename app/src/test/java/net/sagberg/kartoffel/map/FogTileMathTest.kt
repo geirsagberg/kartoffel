@@ -1,8 +1,8 @@
 package net.sagberg.kartoffel.map
 
 import net.sagberg.kartoffel.coverage.GeoCoordinate
-import net.sagberg.kartoffel.coverage.SeedCoverageCell
-import net.sagberg.kartoffel.coverage.SeedCoverageSnapshot
+import net.sagberg.kartoffel.coverage.CoverageCellShape
+import net.sagberg.kartoffel.coverage.CoverageSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,7 +33,7 @@ class FogTileMathTest {
     fun seedSnapshotFiltersCoverageCellsToTheRequestedTileBounds() {
         val oslo = GeoCoordinate(latitude = 59.9139, longitude = 10.7522)
         val tileBounds = fogTileForCoordinate(oslo, zoom = 15).latLngBounds()
-        val snapshot = SeedCoverageSnapshot(
+        val snapshot = CoverageSnapshot(
             revision = 1,
             cells = listOf(
                 squareCell(
@@ -57,10 +57,10 @@ class FogTileMathTest {
     private fun squareCell(
         id: String,
         center: GeoCoordinate,
-    ): SeedCoverageCell {
+    ): CoverageCellShape {
         val delta = 0.0004
 
-        return SeedCoverageCell(
+        return CoverageCellShape(
             id = id,
             boundary = listOf(
                 GeoCoordinate(

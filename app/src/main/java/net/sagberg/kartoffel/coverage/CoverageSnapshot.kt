@@ -1,6 +1,6 @@
 package net.sagberg.kartoffel.coverage
 
-internal data class SeedCoverageCell(
+internal data class CoverageCellShape(
     val id: String,
     val boundary: List<GeoCoordinate>,
 ) {
@@ -11,10 +11,14 @@ internal data class SeedCoverageCell(
     val bounds: GeoBounds = GeoBounds.containing(boundary)
 }
 
-internal data class SeedCoverageSnapshot(
+internal data class CoverageSnapshot(
     val revision: Int,
-    val cells: List<SeedCoverageCell>,
+    val cells: List<CoverageCellShape>,
 ) {
-    fun cellsIntersecting(bounds: GeoBounds): List<SeedCoverageCell> =
+    fun cellsIntersecting(bounds: GeoBounds): List<CoverageCellShape> =
         cells.filter { it.bounds.intersects(bounds) }
+
+    companion object {
+        val Empty = CoverageSnapshot(revision = 0, cells = emptyList())
+    }
 }

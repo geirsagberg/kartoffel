@@ -5,6 +5,9 @@ import androidx.room3.Query
 
 @Dao
 internal interface CoverageCellDao {
+    @Query("SELECT * FROM coverage_cells ORDER BY cell_id")
+    suspend fun all(): List<CoverageCellEntity>
+
     @Query(
         """
         INSERT INTO coverage_cells(cell_id, first_seen_at_ms, last_seen_at_ms, evidence_mask)
