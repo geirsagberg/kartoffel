@@ -27,6 +27,10 @@ api-keys.properties
 .env.*
 !.env.example
 
+# direnv
+.envrc
+.direnv/
+
 # Signing keys and certificates
 *.jks
 *.keystore
