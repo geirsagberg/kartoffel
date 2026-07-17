@@ -20,7 +20,7 @@ Permissions are requested in context: foreground location for map/session use, a
 - Coverage Compaction may store complete H3 child sets as their parent, while preserving the same logical resolution-11 coverage.
 - The stored set is canonical: no cell is stored alongside one of its ancestors, complete child sets compact recursively, and geometric rendering expands compacted cells to resolution 11.
 - Accuracy-Gated Clearing prefers Passive Gaps over clearly implausible coverage.
-- Conservative Interpolation may fill short adjacency gaps between credible samples, including every equally short local route; broader interpolation remains deferred.
+- Recording Sessions interpolate only between consecutive accepted samples exactly two H3 steps apart. Every cell adjacent to both endpoints clears, so equally short local routes are retained; adjacent samples and broader jumps add no inferred coverage.
 - H3 resolution is provisional until Android rendering is tested.
 
 ### Capture
@@ -32,6 +32,7 @@ Permissions are requested in context: foreground location for map/session use, a
 ### Data
 
 - Room stores Coverage Cells, Location Samples, Recording Sessions, session geometry, and settings.
+- Interpolated coverage is stored only as Coverage Cells; observed Location Samples and Recording Session Points remain the reviewable evidence trail.
 - Upgrading from the pre-session schema resets local data so cells cleared by the retired foreground-fix behavior do not survive.
 - Coverage Cells retain canonical H3 IDs plus first/last-seen times and minimal evidence. A compacted parent aggregates its children with earliest first-seen time, latest last-seen time, and the union of evidence sources.
 - Passive samples may be compressed after a fixed window without losing coverage.

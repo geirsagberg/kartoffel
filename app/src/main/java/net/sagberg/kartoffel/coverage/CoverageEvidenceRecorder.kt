@@ -70,6 +70,19 @@ internal class CoverageEvidenceRecorder(
                 if (recordingSessionId != null) {
                     val previousPoint = database.recordingSessionPoints()
                         .lastForSession(recordingSessionId)
+                    previousPoint?.let { observedPoint ->
+                        coverageCells.intermediateCellsForShortGap(
+                            start = CoverageCellId(observedPoint.cellId),
+                            destination = acceptedCell,
+                        ).forEach { inferredCell ->
+                            database.coverageCells().upsert(
+                                cellId = inferredCell.value,
+                                firstSeenAtMillis = fix.capturedAtMillis,
+                                lastSeenAtMillis = fix.capturedAtMillis,
+                                evidenceMask = evidenceMaskOf(rules.source),
+                            )
+                        }
+                    }
                     if (previousPoint?.cellId != acceptedCell.value) {
                         database.recordingSessionPoints().insert(
                             RecordingSessionPointEntity.fromAcceptedSample(

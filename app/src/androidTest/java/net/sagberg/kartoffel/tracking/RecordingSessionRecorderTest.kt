@@ -17,6 +17,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -127,6 +128,69 @@ class RecordingSessionRecorderTest {
         )
 
         assertEquals(2, database.locationSamples().between(0, 3_000).size)
+        assertEquals(1, database.recordingSessionPoints().forSession(sessionId).size)
+    }
+
+    @Test
+    fun oneCellGapClearsEveryEquallyShortRouteWithoutSyntheticEvidence() = runBlocking {
+        val sessionId = recorder.start(startedAtMillis = 1_000)
+        val start = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
+        val destination = GeoCoordinate(latitude = 59.910527, longitude = 10.751046)
+
+        recorder.record(
+            sessionId,
+            RecordingLocationFix(start, capturedAtMillis = 2_000, accuracyMeters = 8.0),
+        )
+        recorder.record(
+            sessionId,
+            RecordingLocationFix(destination, capturedAtMillis = 3_000, accuracyMeters = 8.0),
+        )
+
+        val cells = database.coverageCells().all()
+        assertEquals(
+            setOf(
+                626169207098265599,
+                626169207099809791,
+                626169207099793407,
+                626169207098388479,
+            ),
+            cells.map { it.cellId }.toSet(),
+        )
+        assertTrue(cells.all {
+            it.evidenceMask == evidenceMaskOf(CoverageEvidenceSource.RECORDING_SESSION)
+        })
+        assertTrue(
+            cells.filter { it.cellId in setOf(626169207099793407, 626169207098388479) }
+                .all { it.firstSeenAtMillis == 3_000L && it.lastSeenAtMillis == 3_000L },
+        )
+        assertEquals(2, database.locationSamples().between(0, 4_000).size)
+        assertEquals(2, database.recordingSessionPoints().forSession(sessionId).size)
+    }
+
+    @Test
+    fun rejectedFixDoesNotCreateInterpolatedCoverage() = runBlocking {
+        val sessionId = recorder.start(startedAtMillis = 1_000)
+        val start = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
+        val destination = GeoCoordinate(latitude = 59.910527, longitude = 10.751046)
+
+        recorder.record(
+            sessionId,
+            RecordingLocationFix(start, capturedAtMillis = 2_000, accuracyMeters = 8.0),
+        )
+        recorder.record(
+            sessionId,
+            RecordingLocationFix(
+                destination,
+                capturedAtMillis = 3_000,
+                accuracyMeters = MAX_RECORDING_ACCURACY_METERS + 1.0,
+            ),
+        )
+
+        assertEquals(
+            setOf(626169207098265599),
+            database.coverageCells().all().map { it.cellId }.toSet(),
+        )
+        assertEquals(2, database.locationSamples().between(0, 4_000).size)
         assertEquals(1, database.recordingSessionPoints().forSession(sessionId).size)
     }
 }

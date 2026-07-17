@@ -27,4 +27,21 @@ internal class H3CoverageCells(
         h3.cellToBoundary(cell.value).map { vertex ->
             GeoCoordinate(latitude = vertex.lat, longitude = vertex.lng)
         }
+
+    fun intermediateCellsForShortGap(
+        start: CoverageCellId,
+        destination: CoverageCellId,
+    ): Set<CoverageCellId> =
+        runCatching {
+            if (h3.gridDistance(start.value, destination.value) != 2L) {
+                return@runCatching emptySet()
+            }
+
+            val destinationNeighbors = h3.gridDisk(destination.value, 1).toSet()
+            h3.gridDisk(start.value, 1)
+                .asSequence()
+                .filter(destinationNeighbors::contains)
+                .map(::CoverageCellId)
+                .toSet()
+        }.getOrDefault(emptySet())
 }

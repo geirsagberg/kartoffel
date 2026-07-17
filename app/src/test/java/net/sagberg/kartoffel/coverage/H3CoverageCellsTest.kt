@@ -26,4 +26,30 @@ class H3CoverageCellsTest {
         assertTrue(boundary.all { it.latitude in -90.0..90.0 })
         assertTrue(boundary.all { it.longitude in -180.0..180.0 })
     }
+
+    @Test
+    fun returnsEveryEquallyShortIntermediateCellForAOneCellGap() {
+        val start = CoverageCellId(626169207098265599)
+        val destination = CoverageCellId(626169207099809791)
+
+        assertEquals(
+            setOf(
+                CoverageCellId(626169207099793407),
+                CoverageCellId(626169207098388479),
+            ),
+            coverageCells.intermediateCellsForShortGap(start, destination),
+        )
+    }
+
+    @Test
+    fun doesNotInterpolateAdjacentCellsOrLargerGaps() {
+        val start = CoverageCellId(626169207098265599)
+        val adjacent = CoverageCellId(626169207098388479)
+        val fartherAway = coverageCells.cellAt(
+            GeoCoordinate(latitude = 59.915, longitude = 10.7522),
+        )
+
+        assertEquals(emptySet<CoverageCellId>(), coverageCells.intermediateCellsForShortGap(start, adjacent))
+        assertEquals(emptySet<CoverageCellId>(), coverageCells.intermediateCellsForShortGap(start, fartherAway))
+    }
 }
