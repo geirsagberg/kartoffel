@@ -20,7 +20,7 @@ internal object SeededCoverageCells {
         ),
     )
 
-    fun snapshot(): CoverageSnapshot = CoverageSnapshot(revision = 1, cells = cells)
+    fun snapshot(): CoverageSnapshot = CoverageSnapshot(cells = cells)
 
     private fun demoHexCell(
         id: String,

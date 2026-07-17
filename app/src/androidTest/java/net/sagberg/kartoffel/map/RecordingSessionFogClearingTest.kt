@@ -51,7 +51,7 @@ class RecordingSessionFogClearingTest {
                 accuracyMeters = 8.0,
             ),
         )
-        val snapshot = PersistedCoverageLoader(database.coverageCells()).load(revision = 1)
+        val snapshot = PersistedCoverageLoader(database.coverageCells()).load()
         val tile = fogTileForCoordinate(coordinate, zoom = 20)
         val renderedTile = FogOfWarTileProvider(snapshot).getTile(tile.x, tile.y, tile.zoom)
             ?: error("Expected Fog of War provider to return a tile")

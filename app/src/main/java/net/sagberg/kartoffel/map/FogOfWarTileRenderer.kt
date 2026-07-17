@@ -13,7 +13,24 @@ import net.sagberg.kartoffel.coverage.CoverageCellShape
 internal class FogOfWarTileRenderer(
     private val fogColor: Int = Color.argb(185, 24, 29, 36),
 ) {
+    private val fullyFoggedPng by lazy {
+        renderPngUncached(
+            tile = FogTileCoordinate(x = 0, y = 0, zoom = 0),
+            cellsToClear = emptyList(),
+        )
+    }
+
     fun renderPng(
+        tile: FogTileCoordinate,
+        cellsToClear: List<CoverageCellShape>,
+    ): ByteArray =
+        if (cellsToClear.isEmpty()) {
+            fullyFoggedPng
+        } else {
+            renderPngUncached(tile, cellsToClear)
+        }
+
+    private fun renderPngUncached(
         tile: FogTileCoordinate,
         cellsToClear: List<CoverageCellShape>,
     ): ByteArray {

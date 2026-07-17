@@ -17,21 +17,23 @@ Permissions are requested in context: foreground location for map/session use, a
 ### Coverage
 
 - H3 Coverage Cells are the durable truth; rendered fog tiles are disposable.
-- Accuracy-Gated Clearing prefers Passive Gaps over False Coverage.
-- Interpolation between samples is deferred until a later phase; only cells containing accepted samples clear during MVP.
+- Coverage Compaction may store complete H3 child sets as their parent, while preserving the same logical resolution-11 coverage.
+- The stored set is canonical: no cell is stored alongside one of its ancestors, complete child sets compact recursively, and geometric rendering expands compacted cells to resolution 11.
+- Accuracy-Gated Clearing prefers Passive Gaps over clearly implausible coverage.
+- Conservative Interpolation may fill short adjacency gaps between credible samples, including every equally short local route; broader interpolation remains deferred.
 - H3 resolution is provisional until Android rendering is tested.
 
 ### Capture
 
 - Passive Tracking is explicit opt-in and uses bounded, opportunistic Android location capture rather than a constant high-power stream.
-- Recording Sessions provide higher-fidelity start/stop capture without interpolating between samples.
+- Recording Sessions provide higher-fidelity start/stop capture with Conservative Interpolation between accepted samples.
 - Both sources feed the same clearing and persistence pipeline with source-aware rules.
 
 ### Data
 
 - Room stores Coverage Cells, Location Samples, Recording Sessions, session geometry, and settings.
 - Upgrading from the pre-session schema resets local data so cells cleared by the retired foreground-fix behavior do not survive.
-- Coverage Cells retain canonical H3 ID plus first/last-seen times and minimal evidence.
+- Coverage Cells retain canonical H3 IDs plus first/last-seen times and minimal evidence. A compacted parent aggregates its children with earliest first-seen time, latest last-seen time, and the union of evidence sources.
 - Passive samples may be compressed after a fixed window without losing coverage.
 - Recording Sessions keep a reviewable route simplified to Coverage Cell transitions by default.
 
@@ -58,6 +60,7 @@ Automate behavior at stable seams:
 - source-specific clearing behavior;
 - retention without coverage loss;
 - fog tile output for known cells;
+- Coverage Compaction round-trips to the same resolution-11 Coverage Cells and renders the same cleared area;
 - Room persistence and migrations;
 - tracking orchestration behind Android API wrappers.
 

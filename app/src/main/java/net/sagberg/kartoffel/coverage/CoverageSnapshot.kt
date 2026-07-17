@@ -12,13 +12,12 @@ internal data class CoverageCellShape(
 }
 
 internal data class CoverageSnapshot(
-    val revision: Int,
     val cells: List<CoverageCellShape>,
 ) {
     fun cellsIntersecting(bounds: GeoBounds): List<CoverageCellShape> =
         cells.filter { it.bounds.intersects(bounds) }
 
     companion object {
-        val Empty = CoverageSnapshot(revision = 0, cells = emptyList())
+        val Empty = CoverageSnapshot(cells = emptyList())
     }
 }

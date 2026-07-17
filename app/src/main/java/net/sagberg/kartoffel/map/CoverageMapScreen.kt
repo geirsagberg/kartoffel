@@ -58,6 +58,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.TileOverlay
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberTileOverlayState
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import net.sagberg.kartoffel.R
 import net.sagberg.kartoffel.coverage.CoverageSnapshot
@@ -83,7 +84,6 @@ internal fun CoverageMapScreen() {
     var firstFix by remember { mutableStateOf<MapCoordinate?>(null) }
     var isRecordingSession by remember { mutableStateOf(false) }
     var centeredOnFirstFix by rememberSaveable { mutableStateOf(false) }
-    var coverageSnapshot by remember { mutableStateOf(CoverageSnapshot.Empty) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -105,30 +105,25 @@ internal fun CoverageMapScreen() {
         position = CameraPosition.fromLatLngZoom(fallbackCameraTarget, 12f)
     }
     val fogTileOverlayState = rememberTileOverlayState()
-    val fogTileProvider = remember(coverageSnapshot.revision) {
-        FogOfWarTileProvider(coverageSnapshot)
-    }
-    var hasObservedInitialFogRevision by remember { mutableStateOf(false) }
+    val fogTileProvider = remember { FogOfWarTileProvider(CoverageSnapshot.Empty) }
 
-    LaunchedEffect(database, persistedCoverage) {
-        database.coverageCells().observeAll().collect {
-            coverageSnapshot = persistedCoverage.load(
-                revision = coverageSnapshot.revision + 1,
-            )
-        }
+    LaunchedEffect(database, persistedCoverage, fogTileProvider, fogTileOverlayState) {
+        var hasLoadedInitialCoverage = false
+        database.coverageCells().observeAll()
+            .distinctUntilChangedBy { cells -> cells.map { cell -> cell.cellId } }
+            .collect { cells ->
+                fogTileProvider.updateCoverage(persistedCoverage.load(cells))
+                if (hasLoadedInitialCoverage) {
+                    fogTileOverlayState.clearTileCache()
+                }
+                hasLoadedInitialCoverage = true
+            }
     }
 
     LaunchedEffect(database) {
         database.recordingSessions().observeActive().collect { activeSession ->
             isRecordingSession = activeSession != null
         }
-    }
-
-    LaunchedEffect(coverageSnapshot.revision) {
-        if (hasObservedInitialFogRevision) {
-            fogTileOverlayState.clearTileCache()
-        }
-        hasObservedInitialFogRevision = true
     }
 
     fun moveToCurrentLocation(zoom: Float) {

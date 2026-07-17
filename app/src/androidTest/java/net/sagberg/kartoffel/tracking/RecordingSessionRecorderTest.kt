@@ -76,7 +76,7 @@ class RecordingSessionRecorderTest {
             evidenceMaskOf(CoverageEvidenceSource.RECORDING_SESSION),
             cell?.evidenceMask,
         )
-        val snapshot = PersistedCoverageLoader(database.coverageCells()).load(revision = 1)
+        val snapshot = PersistedCoverageLoader(database.coverageCells()).load()
         assertEquals(
             H3CoverageCells().boundaryOf(CoverageCellId(cellId)),
             snapshot.cells.single().boundary,

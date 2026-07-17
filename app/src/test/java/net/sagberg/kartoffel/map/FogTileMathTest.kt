@@ -34,7 +34,6 @@ class FogTileMathTest {
         val oslo = GeoCoordinate(latitude = 59.9139, longitude = 10.7522)
         val tileBounds = fogTileForCoordinate(oslo, zoom = 15).latLngBounds()
         val snapshot = CoverageSnapshot(
-            revision = 1,
             cells = listOf(
                 squareCell(
                     id = "near-oslo",
