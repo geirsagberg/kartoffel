@@ -11,10 +11,12 @@ internal data class CoverageLocationFix(
     val coordinate: GeoCoordinate,
     val capturedAtMillis: Long,
     val accuracyMeters: Double,
+    val speedMetersPerSecond: Double? = null,
 ) {
     init {
         require(capturedAtMillis >= 0)
         require(accuracyMeters >= 0.0)
+        require(speedMetersPerSecond == null || speedMetersPerSecond >= 0.0)
     }
 }
 

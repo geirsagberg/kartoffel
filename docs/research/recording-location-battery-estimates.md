@@ -39,20 +39,20 @@ Thus 10–15 seconds is generally enough for walking, 5 seconds is a good walkin
 
 - accept both endpoint fixes under the existing accuracy threshold and require monotonic timestamps;
 - compute H3 `gridDistance`; if it is 1, add nothing, and if it is exactly 2, add every shared intermediate neighbor on an equally short path;
-- never interpolate when distance is greater than 2, the time gap exceeds a small multiple of the target interval, or implied speed is implausible for the selected activity;
+- never interpolate when distance is greater than 2 or H3 cannot calculate the distance;
 - store inferred coverage distinctly from measured samples, or at minimum never invent a recorded location sample.
 
 H3 guarantees only that `gridPathCells` returns a minimal neighbor-to-neighbor path; it may not closely follow a geographic straight line ([H3 traversal API](https://h3geo.org/docs/api/traversal/)). This limited rule repairs a short missed transition and may clear two equally plausible intermediate cells, without turning a GPS jump, tunnel, pause, or service restart into broad unrealistic coverage. It makes 10 seconds credible for walking and moderate cycling; it does not make 10–15 seconds reliable for driving.
 
 ## Recommendation
 
-Use **5 seconds as the simple default**, with the minimum interval also set to 5 seconds. It cuts delivered fixes and current per-fix database work by 5× while retaining useful walking/cycling fidelity. Add the one-missing-cell interpolation rule above if inferred coverage is acceptable.
+Kartoffel uses **5 seconds as the default**, with the minimum interval also set to 5 seconds. It cuts delivered fixes and current per-fix database work by 5× while retaining useful walking/cycling fidelity. The one-missing-cell interpolation rule above is active for accepted Recording Session fixes.
 
-A better later policy is activity-adaptive:
+Recording polling is activity-adaptive:
 
 | Activity | Desired/minimum interval |
 | --- | ---: |
-| Still | Stop high-accuracy location after a 60 s grace period |
+| Still | Stop high-accuracy location |
 | Walking | 10 s |
 | Running / bicycle | 5 s |
 | In vehicle | 1 s |
@@ -60,14 +60,14 @@ A better later policy is activity-adaptive:
 
 Use Google's Activity Recognition **Transition API**, which is designed around low-power sensor signals and is preferred over raw sampling for power efficiency ([Activity Recognition](https://developers.google.com/location-context/activity-recognition/)). It requires the `ACTIVITY_RECOGNITION` runtime permission on modern Android. Combine activity with reported location speed as an escalation guard:
 
-- `STILL` with speed below 0.5 m/s for a 60-second grace period: remove the high-accuracy location request and wait for an activity-transition event;
+- `STILL`: remove the high-accuracy location request and wait for an activity-transition event;
 - `WALKING` with speed below 2.5 m/s: 10 seconds;
 - `RUNNING`/`ON_BICYCLE`, or speed from 2.5 to 10 m/s: 5 seconds;
 - `IN_VEHICLE`, or speed at or above 10 m/s: 1 second;
 - unknown, conflicting, or transitioning: 5 seconds.
 
-Transitions are not instantaneous and behavior varies by device, so start at 5 seconds, require stable evidence before relaxing to a slower rate, but escalate immediately when either activity or speed indicates faster travel. Use hysteresis when slowing back down to prevent interval thrashing. Speed inferred only from location has a startup blind spot—the app cannot know it needs faster fixes until a slower fix arrives—so it is a guard or fallback, not the sole controller.
+Transitions are not instantaneous and behavior varies by device, so recording starts at 5 seconds and activity events choose the interval thereafter. Reported speed only escalates an active request; a later activity event may relax it. Speed has a startup blind spot—the app cannot know it needs faster fixes until a slower fix arrives—so it is a guard, not the sole controller.
 
-Stopping fixes while still offers a much larger saving than changing 1-second polling to 15-second polling, because it lets GNSS turn off rather than merely requesting it less often. Keep the low-power Activity Recognition transition subscription active; on `STILL` exit or entry into walking, cycling, running, or vehicle activity, immediately restore a 5-second request and then adapt. Capture a final accepted fix before pausing and do not interpolate across the stationary gap beyond the same conservative one-cell rule.
+Stopping fixes while still offers a much larger saving than changing 1-second polling to 15-second polling, because it lets GNSS turn off rather than merely requesting it less often. The low-power Activity Recognition transition subscription remains active; entry into walking, cycling, running, or vehicle activity restores the corresponding request. Interpolation across the stationary gap remains limited to the same conservative one-cell rule.
 
 Before shipping a numeric battery claim, run randomized same-phone, same-route, screen-off A/B recordings for each interval for at least one hour, repeat under good and poor sky view, and compare consumed charge plus GPS/CPU/storage rails. Separately repeat with the map on at fixed brightness.

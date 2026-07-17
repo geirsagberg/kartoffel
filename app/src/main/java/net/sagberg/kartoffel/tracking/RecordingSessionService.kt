@@ -23,15 +23,18 @@ internal class RecordingSessionService : Service() {
     private val commands = Channel<RecordingCommand>(Channel.UNLIMITED)
     private lateinit var database: KartoffelDatabase
     private lateinit var locationUpdates: FusedRecordingLocationUpdates
+    private lateinit var activityUpdates: FusedRecordingActivityUpdates
     private lateinit var orchestrator: RecordingSessionOrchestrator
 
     override fun onCreate() {
         super.onCreate()
         database = KartoffelDatabase.open(this)
         locationUpdates = FusedRecordingLocationUpdates(this, serviceScope)
+        activityUpdates = FusedRecordingActivityUpdates(this, serviceScope)
         orchestrator = RecordingSessionOrchestrator(
             gateway = RecordingSessionRecorder(database),
             locationUpdates = locationUpdates,
+            activityUpdates = activityUpdates,
         )
         createNotificationChannel()
         serviceScope.launch {
@@ -45,6 +48,14 @@ internal class RecordingSessionService : Service() {
                         orchestrator.stop(command.endedAtMillis)
                         stopForeground(STOP_FOREGROUND_REMOVE)
                         stopSelfResult(command.startId)
+                    }
+                    is RecordingCommand.ActivityTransition -> {
+                        if (!orchestrator.resumeActiveSession()) {
+                            stopSelfResult(command.startId)
+                            continue
+                        }
+                        promoteToForeground()
+                        activityUpdates.handleTransitionIntent(command.intent)
                     }
                 }
             }
@@ -60,6 +71,14 @@ internal class RecordingSessionService : Service() {
                     endedAtMillis = System.currentTimeMillis(),
                 ),
             )
+            FusedRecordingActivityUpdates.ACTION_ACTIVITY_TRANSITION -> {
+                commands.trySend(
+                    RecordingCommand.ActivityTransition(
+                        startId = startId,
+                        intent = checkNotNull(intent),
+                    ),
+                )
+            }
         }
         return START_STICKY
     }
@@ -68,6 +87,7 @@ internal class RecordingSessionService : Service() {
 
     override fun onDestroy() {
         locationUpdates.stop()
+        activityUpdates.stop()
         commands.close()
         serviceScope.cancel()
         super.onDestroy()
@@ -147,6 +167,11 @@ internal class RecordingSessionService : Service() {
         data class Stop(
             override val startId: Int,
             val endedAtMillis: Long,
+        ) : RecordingCommand
+
+        data class ActivityTransition(
+            override val startId: Int,
+            val intent: Intent,
         ) : RecordingCommand
     }
 }

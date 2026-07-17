@@ -18,9 +18,14 @@ internal class FusedRecordingLocationUpdates(
     private val client = LocationServices.getFusedLocationProviderClient(context)
     private val looper = context.mainLooper
     private var callback: LocationCallback? = null
+    private var intervalMillis: Long? = null
+    private var requestVersion = 0
 
     @SuppressLint("MissingPermission")
-    override fun start(listener: suspend (RecordingLocationFix) -> Unit) {
+    override fun start(
+        intervalMillis: Long,
+        listener: suspend (RecordingLocationFix) -> Unit,
+    ) {
         check(callback == null) { "Recording location updates are already active" }
         val nextCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
@@ -38,6 +43,11 @@ internal class FusedRecordingLocationUpdates(
                                 } else {
                                     Double.MAX_VALUE
                                 },
+                                speedMetersPerSecond = if (location.hasSpeed()) {
+                                    location.speed.toDouble()
+                                } else {
+                                    null
+                                },
                             ),
                         )
                     }
@@ -45,18 +55,44 @@ internal class FusedRecordingLocationUpdates(
             }
         }
         callback = nextCallback
-        client.requestLocationUpdates(
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
-                .setMinUpdateIntervalMillis(500L)
-                .setMaxUpdateAgeMillis(0L)
-                .build(),
-            nextCallback,
-            looper,
-        )
+        this.intervalMillis = intervalMillis
+        requestVersion += 1
+        requestUpdates(nextCallback, intervalMillis)
+    }
+
+    @SuppressLint("MissingPermission")
+    override fun updateInterval(intervalMillis: Long) {
+        val activeCallback = checkNotNull(callback) { "Recording location updates are not active" }
+        if (intervalMillis == this.intervalMillis) return
+        this.intervalMillis = intervalMillis
+        val version = ++requestVersion
+        client.removeLocationUpdates(activeCallback).addOnCompleteListener {
+            if (
+                callback === activeCallback &&
+                this.intervalMillis == intervalMillis &&
+                requestVersion == version
+            ) {
+                requestUpdates(activeCallback, intervalMillis)
+            }
+        }
     }
 
     override fun stop() {
         callback?.let(client::removeLocationUpdates)
         callback = null
+        intervalMillis = null
+        requestVersion += 1
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun requestUpdates(callback: LocationCallback, intervalMillis: Long) {
+        client.requestLocationUpdates(
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMillis)
+                .setMinUpdateIntervalMillis(intervalMillis)
+                .setMaxUpdateAgeMillis(0L)
+                .build(),
+            callback,
+            looper,
+        )
     }
 }

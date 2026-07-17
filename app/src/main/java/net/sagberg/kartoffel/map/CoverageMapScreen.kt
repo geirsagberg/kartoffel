@@ -205,6 +205,7 @@ internal fun CoverageMapScreen() {
             recordingPermissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACTIVITY_RECOGNITION,
                     Manifest.permission.POST_NOTIFICATIONS,
                 ),
             )

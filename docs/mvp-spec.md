@@ -27,6 +27,8 @@ Permissions are requested in context: foreground location for map/session use, a
 
 - Passive Tracking is explicit opt-in and uses bounded, opportunistic Android location capture rather than a constant high-power stream.
 - Recording Sessions provide higher-fidelity start/stop capture with Conservative Interpolation between accepted samples.
+- Recording Sessions start with a 5-second high-accuracy interval, adapt to 10 seconds while walking, 5 seconds while running or cycling, and 1 second in a vehicle. A `STILL` transition suspends high-accuracy fixes until movement resumes.
+- Reported speed may only escalate polling: at least 2.5 m/s requests 5 seconds and at least 10 m/s requests 1 second. Activity Recognition denial or failure leaves the safe 5-second fallback active.
 - Both sources feed the same clearing and persistence pipeline with source-aware rules.
 
 ### Data
