@@ -15,8 +15,8 @@ internal data class MapCameraRequest(
 
 internal fun shouldRequestForegroundLocation(
     hasLocationPermission: Boolean,
-    acceptedForegroundFix: Boolean,
-): Boolean = hasLocationPermission && !acceptedForegroundFix
+    observedFirstFix: Boolean,
+): Boolean = hasLocationPermission && !observedFirstFix
 
 internal fun firstFixCameraRequest(
     firstFix: MapCoordinate?,

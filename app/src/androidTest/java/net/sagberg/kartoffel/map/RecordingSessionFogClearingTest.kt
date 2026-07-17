@@ -9,11 +9,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlin.math.roundToInt
 import kotlinx.coroutines.runBlocking
-import net.sagberg.kartoffel.coverage.ForegroundCoverageRecorder
-import net.sagberg.kartoffel.coverage.ForegroundLocationFix
 import net.sagberg.kartoffel.coverage.GeoCoordinate
 import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
 import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.tracking.RecordingLocationFix
+import net.sagberg.kartoffel.tracking.RecordingSessionRecorder
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -21,7 +21,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class ForegroundFogClearingTest {
+class RecordingSessionFogClearingTest {
     private lateinit var database: KartoffelDatabase
 
     @Before
@@ -39,10 +39,13 @@ class ForegroundFogClearingTest {
     }
 
     @Test
-    fun acceptedForegroundFixClearsItsPersistedFogPixel() = runBlocking {
+    fun acceptedRecordingSessionFixClearsItsPersistedFogPixel() = runBlocking {
         val coordinate = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
-        ForegroundCoverageRecorder(database).record(
-            ForegroundLocationFix(
+        val recorder = RecordingSessionRecorder(database)
+        val sessionId = recorder.start(startedAtMillis = 500)
+        recorder.record(
+            sessionId,
+            RecordingLocationFix(
                 coordinate = coordinate,
                 capturedAtMillis = 1_000,
                 accuracyMeters = 8.0,

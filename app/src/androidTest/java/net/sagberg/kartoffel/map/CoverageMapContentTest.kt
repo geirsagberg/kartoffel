@@ -3,6 +3,7 @@ package net.sagberg.kartoffel.map
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Rule
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class CoverageMapContentTest {
@@ -51,6 +53,29 @@ class CoverageMapContentTest {
         compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
     }
 
+    @Test
+    fun recordingSessionControlStartsAndStopsDeliberateCapture() {
+        val requestedRecording = mutableStateOf(false)
+        compose.setContent {
+            MaterialTheme {
+                CoverageMapContent(
+                    hasLocationPermission = true,
+                    isRecordingSession = requestedRecording.value,
+                    onRequestLocationPermission = {},
+                    onStartRecordingSession = { requestedRecording.value = true },
+                    onStopRecordingSession = { requestedRecording.value = false },
+                    onCenterCurrentLocation = {},
+                    map = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Start").performClick()
+        compose.runOnIdle { assertEquals(true, requestedRecording.value) }
+        compose.onNodeWithText("Stop").performClick()
+        compose.runOnIdle { assertEquals(false, requestedRecording.value) }
+    }
+
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setCoverageMapContent(
         hasLocationPermission: Boolean,
     ) {
@@ -58,7 +83,10 @@ class CoverageMapContentTest {
             MaterialTheme {
                 CoverageMapContent(
                     hasLocationPermission = hasLocationPermission,
+                    isRecordingSession = false,
                     onRequestLocationPermission = {},
+                    onStartRecordingSession = {},
+                    onStopRecordingSession = {},
                     onCenterCurrentLocation = {},
                     map = {
                         Box(

@@ -2,9 +2,13 @@ package net.sagberg.kartoffel.storage
 
 import androidx.room3.Dao
 import androidx.room3.Query
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 internal interface CoverageCellDao {
+    @Query("SELECT * FROM coverage_cells ORDER BY cell_id")
+    fun observeAll(): Flow<List<CoverageCellEntity>>
+
     @Query("SELECT * FROM coverage_cells ORDER BY cell_id")
     suspend fun all(): List<CoverageCellEntity>
 

@@ -61,11 +61,9 @@ import com.google.maps.android.compose.rememberTileOverlayState
 import kotlinx.coroutines.launch
 import net.sagberg.kartoffel.R
 import net.sagberg.kartoffel.coverage.CoverageSnapshot
-import net.sagberg.kartoffel.coverage.ForegroundCoverageRecorder
-import net.sagberg.kartoffel.coverage.ForegroundLocationFix
-import net.sagberg.kartoffel.coverage.GeoCoordinate
 import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
 import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.tracking.RecordingSessionService
 
 @Composable
 @SuppressLint("MissingPermission")
@@ -76,7 +74,6 @@ internal fun CoverageMapScreen() {
         LocationServices.getFusedLocationProviderClient(context)
     }
     val database = remember(context) { KartoffelDatabase.open(context) }
-    val coverageRecorder = remember(database) { ForegroundCoverageRecorder(database) }
     val persistedCoverage = remember(database) {
         PersistedCoverageLoader(database.coverageCells())
     }
@@ -84,19 +81,23 @@ internal fun CoverageMapScreen() {
         mutableStateOf(context.hasForegroundLocationPermission())
     }
     var firstFix by remember { mutableStateOf<MapCoordinate?>(null) }
-    var acceptedForegroundFix by remember { mutableStateOf(false) }
-    var recordingForegroundFix by remember { mutableStateOf(false) }
+    var isRecordingSession by remember { mutableStateOf(false) }
     var centeredOnFirstFix by rememberSaveable { mutableStateOf(false) }
     var coverageSnapshot by remember { mutableStateOf(CoverageSnapshot.Empty) }
-
-    DisposableEffect(database) {
-        onDispose { database.close() }
-    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         hasLocationPermission = granted
+    }
+    val recordingPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        hasLocationPermission = context.hasForegroundLocationPermission()
+        if (hasLocationPermission) {
+            RecordingSessionService.start(context)
+            isRecordingSession = true
+        }
     }
 
     val fallbackCameraTarget = remember { LatLng(59.9139, 10.7522) }
@@ -109,8 +110,18 @@ internal fun CoverageMapScreen() {
     }
     var hasObservedInitialFogRevision by remember { mutableStateOf(false) }
 
-    LaunchedEffect(persistedCoverage) {
-        coverageSnapshot = persistedCoverage.load(revision = coverageSnapshot.revision + 1)
+    LaunchedEffect(database, persistedCoverage) {
+        database.coverageCells().observeAll().collect {
+            coverageSnapshot = persistedCoverage.load(
+                revision = coverageSnapshot.revision + 1,
+            )
+        }
+    }
+
+    LaunchedEffect(database) {
+        database.recordingSessions().observeActive().collect { activeSession ->
+            isRecordingSession = activeSession != null
+        }
     }
 
     LaunchedEffect(coverageSnapshot.revision) {
@@ -143,8 +154,8 @@ internal fun CoverageMapScreen() {
             }
     }
 
-    DisposableEffect(hasLocationPermission, acceptedForegroundFix, context, fusedLocationClient) {
-        if (!shouldRequestForegroundLocation(hasLocationPermission, acceptedForegroundFix)) {
+    DisposableEffect(hasLocationPermission, firstFix, context, fusedLocationClient) {
+        if (!shouldRequestForegroundLocation(hasLocationPermission, firstFix != null)) {
             onDispose {}
         } else {
             val locationCallback = object : LocationCallback() {
@@ -152,34 +163,8 @@ internal fun CoverageMapScreen() {
                     val location = locationResult.lastLocation
                         ?: locationResult.locations.firstOrNull()
                         ?: return
-                    if (recordingForegroundFix) return
-
-                    if (firstFix == null) {
-                        firstFix = MapCoordinate(location.latitude, location.longitude)
-                    }
-                    val callback = this
-                    recordingForegroundFix = true
-                    scope.launch {
-                        val decision = coverageRecorder.record(
-                            ForegroundLocationFix(
-                                coordinate = GeoCoordinate(location.latitude, location.longitude),
-                                capturedAtMillis = location.time,
-                                accuracyMeters = if (location.hasAccuracy()) {
-                                    location.accuracy.toDouble()
-                                } else {
-                                    Double.MAX_VALUE
-                                },
-                            ),
-                        )
-                        if (decision.accepted) {
-                            acceptedForegroundFix = true
-                            coverageSnapshot = persistedCoverage.load(
-                                revision = coverageSnapshot.revision + 1,
-                            )
-                            fusedLocationClient.removeLocationUpdates(callback)
-                        }
-                        recordingForegroundFix = false
-                    }
+                    firstFix = MapCoordinate(location.latitude, location.longitude)
+                    fusedLocationClient.removeLocationUpdates(this)
                 }
             }
             val locationRequest = LocationRequest.Builder(
@@ -217,8 +202,21 @@ internal fun CoverageMapScreen() {
 
     CoverageMapContent(
         hasLocationPermission = hasLocationPermission,
+        isRecordingSession = isRecordingSession,
         onRequestLocationPermission = {
             permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        },
+        onStartRecordingSession = {
+            recordingPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ),
+            )
+        },
+        onStopRecordingSession = {
+            RecordingSessionService.stop(context)
+            isRecordingSession = false
         },
         onCenterCurrentLocation = { moveToCurrentLocation(CURRENT_LOCATION_ZOOM) },
         map = {
@@ -249,14 +247,21 @@ internal fun CoverageMapScreen() {
 @Composable
 internal fun CoverageMapContent(
     hasLocationPermission: Boolean,
+    isRecordingSession: Boolean,
     onRequestLocationPermission: () -> Unit,
+    onStartRecordingSession: () -> Unit,
+    onStopRecordingSession: () -> Unit,
     onCenterCurrentLocation: () -> Unit,
     map: @Composable BoxScope.() -> Unit,
 ) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            CoverageMapTopAppBar()
+            CoverageMapTopAppBar(
+                isRecordingSession = isRecordingSession,
+                onStartRecordingSession = onStartRecordingSession,
+                onStopRecordingSession = onStopRecordingSession,
+            )
         },
     ) { contentPadding ->
         Box(
@@ -307,7 +312,11 @@ internal fun CoverageMapContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CoverageMapTopAppBar() {
+private fun CoverageMapTopAppBar(
+    isRecordingSession: Boolean,
+    onStartRecordingSession: () -> Unit,
+    onStopRecordingSession: () -> Unit,
+) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     TopAppBar(
@@ -325,9 +334,13 @@ private fun CoverageMapTopAppBar() {
         actions = {
             Button(
                 modifier = Modifier.testTag("recording_session_control"),
-                onClick = {},
+                onClick = if (isRecordingSession) {
+                    onStopRecordingSession
+                } else {
+                    onStartRecordingSession
+                },
             ) {
-                Text("Start")
+                Text(if (isRecordingSession) "Stop" else "Start")
             }
             IconButton(
                 modifier = Modifier.testTag("settings_diagnostics_menu"),

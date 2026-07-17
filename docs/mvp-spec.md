@@ -8,7 +8,7 @@ The product language and principles live in [`CONTEXT.md`](../CONTEXT.md). Archi
 
 ## Experience
 
-Kartoffel opens to a Coverage Map that centers when location becomes available. The first credible foreground fix is stored and clears its Coverage Cell; inaccurate fixes remain covered. Fog of War hides all other unvisited cells. A compact app bar keeps Passive Tracking status and the start/stop Recording Session control visible; settings and Tracking Diagnostics stay in its overflow menu. The map retains an edge-to-edge current-location control.
+Kartoffel opens to a Coverage Map that centers when location becomes available. This initial foreground fix is used only for map positioning and does not clear coverage. Deliberate Recording Sessions accuracy-gate their samples and clear accepted Coverage Cells; inaccurate fixes remain covered. Fog of War hides all other unvisited cells. A compact app bar keeps Passive Tracking status and the start/stop Recording Session control visible; settings and Tracking Diagnostics stay in its overflow menu. The map retains an edge-to-edge current-location control.
 
 Permissions are requested in context: foreground location for map/session use, and background location plus any required notification/foreground-service permissions when Passive Tracking is enabled.
 
@@ -17,23 +17,23 @@ Permissions are requested in context: foreground location for map/session use, a
 ### Coverage
 
 - H3 Coverage Cells are the durable truth; rendered fog tiles are disposable.
-- Accuracy-Gated Clearing and Conservative Interpolation prefer Passive Gaps over False Coverage.
-- Recording Sessions may trust short plausible gaps more than Passive Tracking.
-- Long gaps and implausible movement must not clear straight-line routes.
+- Accuracy-Gated Clearing prefers Passive Gaps over False Coverage.
+- Interpolation between samples is deferred until a later phase; only cells containing accepted samples clear during MVP.
 - H3 resolution is provisional until Android rendering is tested.
 
 ### Capture
 
 - Passive Tracking is explicit opt-in and uses bounded, opportunistic Android location capture rather than a constant high-power stream.
-- Recording Sessions provide higher-fidelity start/stop capture.
+- Recording Sessions provide higher-fidelity start/stop capture without interpolating between samples.
 - Both sources feed the same clearing and persistence pipeline with source-aware rules.
 
 ### Data
 
 - Room stores Coverage Cells, Location Samples, Recording Sessions, session geometry, and settings.
+- Upgrading from the pre-session schema resets local data so cells cleared by the retired foreground-fix behavior do not survive.
 - Coverage Cells retain canonical H3 ID plus first/last-seen times and minimal evidence.
 - Passive samples may be compressed after a fixed window without losing coverage.
-- Recording Sessions keep a simplified reviewable route by default.
+- Recording Sessions keep a reviewable route simplified to Coverage Cell transitions by default.
 
 ### Diagnostics
 
@@ -54,7 +54,7 @@ Do not add accounts, cloud sync, backup/restore, import/merge, offline maps, soc
 Automate behavior at stable seams:
 
 - sample acceptance, rejection, and resulting Coverage Cells;
-- interpolation across plausible and implausible gaps;
+- recording samples clear only their own Coverage Cells;
 - source-specific clearing behavior;
 - retention without coverage loss;
 - fog tile output for known cells;

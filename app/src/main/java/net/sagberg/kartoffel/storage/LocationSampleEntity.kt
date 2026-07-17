@@ -23,6 +23,8 @@ internal data class LocationSampleEntity(
     val accepted: Boolean,
     @ColumnInfo(name = "rejection_reason")
     val rejectionReason: String?,
+    @ColumnInfo(name = "recording_session_id")
+    val recordingSessionId: Long? = null,
 ) {
     init {
         require(latitude in -90.0..90.0)

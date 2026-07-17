@@ -8,23 +8,23 @@ import org.junit.Test
 
 class CoverageMapStateTest {
     @Test
-    fun foregroundLocationIsRequestedUntilAnAcceptedFixClearsCoverage() {
+    fun foregroundLocationIsRequestedOnlyUntilTheMapObservesItsFirstFix() {
         assertFalse(
             shouldRequestForegroundLocation(
                 hasLocationPermission = false,
-                acceptedForegroundFix = false,
+                observedFirstFix = false,
             )
         )
         assertTrue(
             shouldRequestForegroundLocation(
                 hasLocationPermission = true,
-                acceptedForegroundFix = false,
+                observedFirstFix = false,
             )
         )
         assertFalse(
             shouldRequestForegroundLocation(
                 hasLocationPermission = true,
-                acceptedForegroundFix = true,
+                observedFirstFix = true,
             )
         )
     }

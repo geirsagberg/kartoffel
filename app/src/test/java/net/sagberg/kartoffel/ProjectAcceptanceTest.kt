@@ -94,6 +94,23 @@ class ProjectAcceptanceTest {
     }
 
     @Test
+    fun recordingSessionsUseAnAndroidLocationForegroundService() {
+        val manifest = root.resolve("app/src/main/AndroidManifest.xml").readText()
+        val service = root
+            .resolve(
+                "app/src/main/java/net/sagberg/kartoffel/tracking/RecordingSessionService.kt",
+            )
+
+        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE"))
+        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_LOCATION"))
+        assertTrue(manifest.contains("android.permission.POST_NOTIFICATIONS"))
+        assertTrue(manifest.contains("android:foregroundServiceType=\"location\""))
+        assertTrue(manifest.contains(".tracking.RecordingSessionService"))
+        assertTrue(service.exists())
+        assertTrue(service.readText().contains("return START_STICKY"))
+    }
+
+    @Test
     fun trackedFilesDoNotContainGeneratedOutputsOrLocalSecrets() {
         val forbidden = trackedFiles().filter { path ->
             path == "local.properties" ||
