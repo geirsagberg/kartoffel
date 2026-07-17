@@ -9,6 +9,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import java.io.ByteArrayOutputStream
 import net.sagberg.kartoffel.coverage.CoverageCellShape
+import androidx.core.graphics.createBitmap
 
 internal class FogOfWarTileRenderer(
     private val fogColor: Int = Color.argb(185, 24, 29, 36),
@@ -34,11 +35,7 @@ internal class FogOfWarTileRenderer(
         tile: FogTileCoordinate,
         cellsToClear: List<CoverageCellShape>,
     ): ByteArray {
-        val bitmap = Bitmap.createBitmap(
-            FOG_TILE_SIZE,
-            FOG_TILE_SIZE,
-            Bitmap.Config.ARGB_8888,
-        )
+        val bitmap = createBitmap(FOG_TILE_SIZE, FOG_TILE_SIZE)
         val canvas = Canvas(bitmap)
         canvas.drawColor(fogColor)
 
