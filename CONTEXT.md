@@ -25,7 +25,9 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 - **Passive Gap:** a visited place left covered because passive evidence was insufficient.
 - **Passive Tracking:** opt-in capture without starting a Recording Session.
 - **Recording Session:** deliberate, higher-fidelity capture for a route the user cares about.
-- **Tracking Diagnostics:** a secondary view explaining capture, rejection, gaps, and clearing.
+- **Activity Mode:** the most recently recognized movement state when a location fix was received. `Unknown` covers both unavailable recognition and the absence of a recognized state, including fixes retained from before Activity Mode was recorded.
+- **Requested Location Interval:** the location-update cadence Kartoffel asks Android to provide. It describes tracking policy, not the cadence Android actually delivers.
+- **Tracking Diagnostics:** a secondary tuning view for inspecting what tracking is doing and why coverage was or was not cleared. During the MVP it is an owner/developer instrument, not a polished end-user explanation.
 - **Evidence Compression:** reducing retained samples while preserving coverage and useful session history.
 - **Evidence Retention:** how long evidence is kept before deletion or compression.
 
