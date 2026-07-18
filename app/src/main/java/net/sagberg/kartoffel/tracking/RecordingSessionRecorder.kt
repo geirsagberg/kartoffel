@@ -8,6 +8,7 @@ import net.sagberg.kartoffel.coverage.CoverageLocationFix
 import net.sagberg.kartoffel.coverage.H3CoverageCells
 import net.sagberg.kartoffel.storage.CoverageEvidenceSource
 import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.storage.PersistedActivityMode
 import net.sagberg.kartoffel.storage.RecordingSessionEntity
 
 internal const val MAX_RECORDING_ACCURACY_METERS = 20.0
@@ -35,6 +36,7 @@ internal class RecordingSessionRecorder(
     override suspend fun record(
         sessionId: Long,
         fix: RecordingLocationFix,
+        activity: RecordingActivity,
     ): RecordingLocationDecision {
         val session = requireNotNull(database.recordingSessions().find(sessionId)) {
             "Recording Session $sessionId does not exist"
@@ -49,6 +51,7 @@ internal class RecordingSessionRecorder(
                 accuracyRejectionReason = RECORDING_ACCURACY_REJECTION,
             ),
             recordingSessionId = sessionId,
+            activityMode = activity.persistedMode,
         )
     }
 
@@ -60,3 +63,13 @@ internal class RecordingSessionRecorder(
         database.recordingSessions().stop(sessionId, endedAtMillis)
     }
 }
+
+private val RecordingActivity.persistedMode: PersistedActivityMode
+    get() = when (this) {
+        RecordingActivity.STILL -> PersistedActivityMode.STILL
+        RecordingActivity.WALKING -> PersistedActivityMode.WALKING
+        RecordingActivity.RUNNING -> PersistedActivityMode.RUNNING
+        RecordingActivity.ON_BICYCLE -> PersistedActivityMode.CYCLING
+        RecordingActivity.IN_VEHICLE -> PersistedActivityMode.IN_VEHICLE
+        RecordingActivity.UNKNOWN -> PersistedActivityMode.UNKNOWN
+    }

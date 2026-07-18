@@ -13,6 +13,7 @@ internal interface RecordingSessionGateway {
     suspend fun record(
         sessionId: Long,
         fix: RecordingLocationFix,
+        activity: RecordingActivity = RecordingActivity.UNKNOWN,
     ): RecordingLocationDecision
 
     suspend fun stop(sessionId: Long, endedAtMillis: Long)
@@ -111,7 +112,7 @@ internal class RecordingSessionOrchestrator(
 
     private suspend fun record(fix: RecordingLocationFix) = mutex.withLock {
         activeSessionId?.let { sessionId ->
-            val decision = gateway.record(sessionId, fix)
+            val decision = gateway.record(sessionId, fix, latestActivity)
             diagnostics.fixReceived(
                 LatestFixDiagnostics(
                     capturedAtMillis = fix.capturedAtMillis,

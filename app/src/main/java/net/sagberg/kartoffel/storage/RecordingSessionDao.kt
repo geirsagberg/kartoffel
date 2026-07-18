@@ -17,6 +17,26 @@ internal interface RecordingSessionDao {
     )
     fun observeActive(): Flow<RecordingSessionEntity?>
 
+    @Query(
+        """
+        SELECT * FROM recording_sessions
+        WHERE ended_at_ms IS NULL
+        ORDER BY started_at_ms DESC, id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun active(): RecordingSessionEntity?
+
+    @Query(
+        """
+        SELECT * FROM recording_sessions
+        WHERE ended_at_ms IS NOT NULL
+        ORDER BY ended_at_ms DESC, started_at_ms DESC, id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun latestCompleted(): RecordingSessionEntity?
+
     @Insert
     suspend fun insert(session: RecordingSessionEntity): Long
 

@@ -25,6 +25,8 @@ internal data class LocationSampleEntity(
     val rejectionReason: String?,
     @ColumnInfo(name = "recording_session_id")
     val recordingSessionId: Long? = null,
+    @ColumnInfo(name = "activity_mode", defaultValue = "'unknown'")
+    val activityMode: String = PersistedActivityMode.UNKNOWN.persistedName,
 ) {
     init {
         require(latitude in -90.0..90.0)

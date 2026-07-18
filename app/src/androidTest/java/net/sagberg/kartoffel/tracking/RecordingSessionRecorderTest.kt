@@ -54,6 +54,7 @@ class RecordingSessionRecorderTest {
                 capturedAtMillis = 2_000,
                 accuracyMeters = 8.0,
             ),
+            RecordingActivity.WALKING,
         )
         recorder.stop(sessionId, endedAtMillis = 3_000)
 
@@ -67,6 +68,7 @@ class RecordingSessionRecorderTest {
         assertEquals(3_000L, session?.endedAtMillis)
         assertEquals(sessionId, sample.recordingSessionId)
         assertEquals(true, sample.accepted)
+        assertEquals("walking", sample.activityMode)
         assertNull(sample.rejectionReason)
         assertEquals(1, route.size)
         assertEquals(sample.id, route.single().sampleId)

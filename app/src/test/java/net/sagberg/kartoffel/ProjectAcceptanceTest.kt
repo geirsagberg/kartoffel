@@ -82,7 +82,8 @@ class ProjectAcceptanceTest {
         val manifest = root.resolve("app/src/main/AndroidManifest.xml").readText()
 
         assertTrue(mainActivity.contains("KartoffelApp()"))
-        assertTrue(mainActivity.contains("CoverageMapScreen()"))
+        assertTrue(mainActivity.contains("CoverageMapScreen("))
+        assertTrue(mainActivity.contains("TrackingDiagnosticsRoute("))
         assertTrue(coverageMapScreen.contains("GoogleMap("))
         assertTrue(coverageMapScreen.contains("Modifier.fillMaxSize()"))
         assertTrue(coverageMapScreen.contains("MapProperties("))

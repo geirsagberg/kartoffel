@@ -4,6 +4,7 @@ import androidx.room3.withWriteTransaction
 import net.sagberg.kartoffel.storage.CoverageEvidenceSource
 import net.sagberg.kartoffel.storage.KartoffelDatabase
 import net.sagberg.kartoffel.storage.LocationSampleEntity
+import net.sagberg.kartoffel.storage.PersistedActivityMode
 import net.sagberg.kartoffel.storage.RecordingSessionPointEntity
 import net.sagberg.kartoffel.storage.evidenceMaskOf
 
@@ -44,6 +45,7 @@ internal class CoverageEvidenceRecorder(
         fix: CoverageLocationFix,
         rules: CoverageEvidenceRules,
         recordingSessionId: Long? = null,
+        activityMode: PersistedActivityMode = PersistedActivityMode.UNKNOWN,
     ): CoverageLocationDecision {
         val decision = if (fix.accuracyMeters <= rules.maximumAccuracyMeters) {
             CoverageLocationDecision(accepted = true, rejectionReason = null)
@@ -66,6 +68,7 @@ internal class CoverageEvidenceRecorder(
                 accepted = decision.accepted,
                 rejectionReason = decision.rejectionReason,
                 recordingSessionId = recordingSessionId,
+                activityMode = activityMode.persistedName,
             )
             val sampleId = database.locationSamples().insert(sample)
             cell?.let { acceptedCell ->

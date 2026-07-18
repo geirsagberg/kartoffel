@@ -33,7 +33,10 @@ class RecordingSessionOrchestratorTest {
         assertEquals(1, locationUpdates.stopCount)
         assertTrue(activityUpdates.started)
         assertTrue(activityUpdates.stopped)
-        assertEquals(listOf(42L to fix), gateway.recorded)
+        assertEquals(
+            listOf(Triple(42L, fix, RecordingActivity.UNKNOWN)),
+            gateway.recorded,
+        )
         assertEquals(listOf(42L to 3_000L), gateway.stopped)
         assertFalse(orchestrator.isRecording)
     }
@@ -70,7 +73,10 @@ class RecordingSessionOrchestratorTest {
         locationUpdates.emit(fix)
 
         assertEquals(0, gateway.startCount)
-        assertEquals(listOf(99L to fix), gateway.recorded)
+        assertEquals(
+            listOf(Triple(99L, fix, RecordingActivity.UNKNOWN)),
+            gateway.recorded,
+        )
     }
 
     @Test
@@ -116,8 +122,9 @@ class RecordingSessionOrchestratorTest {
         val locationUpdates = FakeRecordingLocationUpdates()
         val activityUpdates = FakeRecordingActivityUpdates()
         val diagnostics = LiveTrackingDiagnostics()
+        val gateway = FakeRecordingSessionGateway()
         val orchestrator = RecordingSessionOrchestrator(
-            FakeRecordingSessionGateway(),
+            gateway,
             locationUpdates,
             activityUpdates,
             diagnostics,
@@ -183,7 +190,10 @@ class RecordingSessionOrchestratorTest {
 
         assertEquals(listOf(5_000L, 10_000L), locationUpdates.startedIntervals)
         assertEquals(1, locationUpdates.stopCount)
-        assertEquals(listOf(42L to initialFix), gateway.recorded)
+        assertEquals(
+            listOf(Triple(42L, initialFix, RecordingActivity.STILL)),
+            gateway.recorded,
+        )
         assertTrue(activityUpdates.started)
     }
 
@@ -330,8 +340,9 @@ class RecordingSessionOrchestratorTest {
         val locationUpdates = FakeRecordingLocationUpdates()
         val activityUpdates = FakeRecordingActivityUpdates()
         val diagnostics = LiveTrackingDiagnostics()
+        val gateway = FakeRecordingSessionGateway()
         val orchestrator = RecordingSessionOrchestrator(
-            FakeRecordingSessionGateway(),
+            gateway,
             locationUpdates,
             activityUpdates,
             diagnostics,
@@ -354,6 +365,7 @@ class RecordingSessionOrchestratorTest {
         assertEquals(1_000L, diagnostics.state.value.requestedLocationIntervalMillis)
         assertEquals(RequestedIntervalReason.SPEED_OVERRIDE, diagnostics.state.value.intervalReason)
         assertEquals(RecordingActivity.WALKING, diagnostics.state.value.activityMode)
+        assertTrue(gateway.recorded.all { it.third == RecordingActivity.WALKING })
     }
 
     @Test
@@ -405,7 +417,7 @@ class RecordingSessionOrchestratorTest {
         ),
     ) : RecordingSessionGateway {
         var startCount = 0
-        val recorded = mutableListOf<Pair<Long, RecordingLocationFix>>()
+        val recorded = mutableListOf<Triple<Long, RecordingLocationFix, RecordingActivity>>()
         val stopped = mutableListOf<Pair<Long, Long>>()
 
         override suspend fun activeSessionId(): Long? = activeSessionId
@@ -418,8 +430,9 @@ class RecordingSessionOrchestratorTest {
         override suspend fun record(
             sessionId: Long,
             fix: RecordingLocationFix,
+            activity: RecordingActivity,
         ): RecordingLocationDecision {
-            recorded += sessionId to fix
+            recorded += Triple(sessionId, fix, activity)
             return decision
         }
 

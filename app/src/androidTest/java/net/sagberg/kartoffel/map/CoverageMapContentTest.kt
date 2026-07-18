@@ -54,12 +54,18 @@ class CoverageMapContentTest {
 
     @Test
     fun secondaryActionsAreAvailableFromTheOverflowMenu() {
-        compose.setCoverageMapContent(hasLocationPermission = true)
+        var diagnosticsOpened = false
+        compose.setCoverageMapContent(
+            hasLocationPermission = true,
+            onOpenTrackingDiagnostics = { diagnosticsOpened = true },
+        )
 
         compose.onNodeWithContentDescription("More options").performClick()
 
         compose.onNodeWithText("Settings").assertIsDisplayed()
         compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
+        compose.onNodeWithText("Tracking diagnostics").performClick()
+        compose.runOnIdle { assertEquals(true, diagnosticsOpened) }
     }
 
     @Test
@@ -203,6 +209,7 @@ class CoverageMapContentTest {
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setCoverageMapContent(
         hasLocationPermission: Boolean,
+        onOpenTrackingDiagnostics: () -> Unit = {},
     ) {
         setContent {
             MaterialTheme {
@@ -213,6 +220,7 @@ class CoverageMapContentTest {
                     onStartRecordingSession = {},
                     onStopRecordingSession = {},
                     onCenterCurrentLocation = {},
+                    onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
                     map = {
                         Box(
                             modifier = Modifier

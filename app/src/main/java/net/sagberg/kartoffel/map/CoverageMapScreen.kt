@@ -87,7 +87,9 @@ import kotlin.time.Duration.Companion.seconds
 
 @Composable
 @SuppressLint("MissingPermission")
-internal fun CoverageMapScreen() {
+internal fun CoverageMapScreen(
+    onOpenTrackingDiagnostics: () -> Unit = {},
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val fusedLocationClient = remember(context) {
@@ -246,6 +248,7 @@ internal fun CoverageMapScreen() {
             isRecordingSession = false
         },
         onCenterCurrentLocation = { moveToCurrentLocation(CURRENT_LOCATION_ZOOM) },
+        onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
         map = {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
@@ -281,6 +284,7 @@ internal fun CoverageMapContent(
     onStartRecordingSession: () -> Unit,
     onStopRecordingSession: () -> Unit,
     onCenterCurrentLocation: () -> Unit,
+    onOpenTrackingDiagnostics: () -> Unit = {},
     map: @Composable BoxScope.() -> Unit,
 ) {
     Scaffold(
@@ -288,6 +292,7 @@ internal fun CoverageMapContent(
         topBar = {
             CoverageMapTopAppBar(
                 isRecordingSession = isRecordingSession,
+                onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
             )
         },
     ) { contentPadding ->
@@ -498,6 +503,7 @@ private fun LatestFixDiagnostics?.displayDecision(): String {
 @Composable
 private fun CoverageMapTopAppBar(
     isRecordingSession: Boolean,
+    onOpenTrackingDiagnostics: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -541,7 +547,10 @@ private fun CoverageMapTopAppBar(
                 )
                 DropdownMenuItem(
                     text = { Text("Tracking diagnostics") },
-                    onClick = { menuExpanded = false },
+                    onClick = {
+                        menuExpanded = false
+                        onOpenTrackingDiagnostics()
+                    },
                 )
             }
         },
