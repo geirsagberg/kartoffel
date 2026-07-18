@@ -37,6 +37,7 @@ internal class RecordingSessionService : Service() {
             locationUpdates = locationUpdates,
             activityUpdates = activityUpdates,
             diagnostics = LiveTrackingDiagnostics.processInstance,
+            initialFixTimeout = CoroutineRecordingInitialFixTimeout(serviceScope),
         )
         createNotificationChannel()
         serviceScope.launch {

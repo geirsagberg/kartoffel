@@ -71,12 +71,15 @@ internal class RecordingSessionOrchestrator(
     private val locationUpdates: RecordingLocationUpdates,
     private val activityUpdates: RecordingActivityUpdates,
     private val diagnostics: LiveTrackingDiagnostics = LiveTrackingDiagnostics(),
+    private val initialFixTimeout: RecordingInitialFixTimeout = NoOpRecordingInitialFixTimeout,
 ) {
     private val mutex = Mutex()
     private var activeSessionId: Long? = null
     private var locationUpdatesActive = false
     private var currentIntervalMillis: Long? = null
     private var bootstrapCanSeedActivity = false
+    private var awaitingInitialAcceptedFix = false
+    private var latestActivity = RecordingActivity.UNKNOWN
 
     val isRecording: Boolean
         get() = activeSessionId != null
@@ -98,6 +101,8 @@ internal class RecordingSessionOrchestrator(
         val sessionId = activeSessionId ?: gateway.activeSessionId() ?: return@withLock
         activityUpdates.stop()
         bootstrapCanSeedActivity = false
+        initialFixTimeout.cancel()
+        awaitingInitialAcceptedFix = false
         stopLocationUpdates()
         activeSessionId = null
         gateway.stop(sessionId, endedAtMillis)
@@ -115,7 +120,14 @@ internal class RecordingSessionOrchestrator(
                     rejectionReason = decision.rejectionReason,
                 ),
             )
-            speedInterval(fix.speedMetersPerSecond)?.let(::useFasterInterval)
+            if (decision.accepted && awaitingInitialAcceptedFix) {
+                awaitingInitialAcceptedFix = false
+                initialFixTimeout.cancel()
+                applyLocationPolicy(latestActivity)
+            }
+            if (!awaitingInitialAcceptedFix) {
+                speedInterval(fix.speedMetersPerSecond)?.let(::useFasterInterval)
+            }
         }
     }
 
@@ -140,6 +152,15 @@ internal class RecordingSessionOrchestrator(
             }
         }
         val activity = update.activity
+        latestActivity = activity
+        if (awaitingInitialAcceptedFix) {
+            diagnostics.activityObservedWhileAwaitingInitialFix(activity)
+            return@withLock
+        }
+        applyLocationPolicy(activity)
+    }
+
+    private fun applyLocationPolicy(activity: RecordingActivity) {
         val intervalMillis = activity.intervalMillis
         if (intervalMillis == null) {
             stopLocationUpdates()
@@ -161,13 +182,22 @@ internal class RecordingSessionOrchestrator(
     private fun activate(sessionId: Long) {
         activeSessionId = sessionId
         bootstrapCanSeedActivity = true
+        awaitingInitialAcceptedFix = true
+        latestActivity = RecordingActivity.UNKNOWN
         startLocationUpdates(DEFAULT_RECORDING_INTERVAL_MILLIS)
         diagnostics.sessionStarted(DEFAULT_RECORDING_INTERVAL_MILLIS)
+        initialFixTimeout.start(::onInitialFixTimeout)
         runCatching { activityUpdates.start(::onActivity) }
             .onFailure {
                 bootstrapCanSeedActivity = false
                 diagnostics.activityRecognitionUnavailable()
             }
+    }
+
+    private suspend fun onInitialFixTimeout() = mutex.withLock {
+        if (activeSessionId == null || !awaitingInitialAcceptedFix) return@withLock
+        awaitingInitialAcceptedFix = false
+        applyLocationPolicy(latestActivity)
     }
 
     private fun stopLocationUpdates() {

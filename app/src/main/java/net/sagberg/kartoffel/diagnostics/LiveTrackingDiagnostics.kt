@@ -75,6 +75,10 @@ internal class LiveTrackingDiagnostics {
         )
     }
 
+    fun activityObservedWhileAwaitingInitialFix(activityMode: RecordingActivity) {
+        mutableState.value = mutableState.value.copy(activityMode = activityMode)
+    }
+
     fun activityRecognitionUnavailable() {
         mutableState.value = mutableState.value.copy(
             activityMode = RecordingActivity.UNKNOWN,
