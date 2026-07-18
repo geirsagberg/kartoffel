@@ -2,6 +2,11 @@ package net.sagberg.kartoffel.tracking
 
 import kotlinx.coroutines.runBlocking
 import net.sagberg.kartoffel.coverage.GeoCoordinate
+import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
+import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnostics
+import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnosticsState
+import net.sagberg.kartoffel.diagnostics.LocationUpdateState
+import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -106,6 +111,51 @@ class RecordingSessionOrchestratorTest {
     }
 
     @Test
+    fun liveDiagnosticsExplainTheCurrentLocationPolicy() = runBlocking {
+        val locationUpdates = FakeRecordingLocationUpdates()
+        val activityUpdates = FakeRecordingActivityUpdates()
+        val diagnostics = LiveTrackingDiagnostics()
+        val orchestrator = RecordingSessionOrchestrator(
+            FakeRecordingSessionGateway(),
+            locationUpdates,
+            activityUpdates,
+            diagnostics,
+        )
+
+        orchestrator.start(startedAtMillis = 1_000)
+
+        assertEquals(
+            LiveTrackingDiagnosticsState(
+                trackingActive = true,
+                activityMode = RecordingActivity.UNKNOWN,
+                locationUpdateState = LocationUpdateState.ACTIVE,
+                requestedLocationIntervalMillis = 5_000,
+                intervalReason = RequestedIntervalReason.SESSION_START,
+            ),
+            diagnostics.state.value,
+        )
+
+        activityUpdates.emit(RecordingActivity.WALKING)
+
+        assertEquals(RecordingActivity.WALKING, diagnostics.state.value.activityMode)
+        assertEquals(10_000L, diagnostics.state.value.requestedLocationIntervalMillis)
+        assertEquals(RequestedIntervalReason.ACTIVITY_MODE, diagnostics.state.value.intervalReason)
+
+        activityUpdates.emit(RecordingActivity.STILL)
+
+        assertEquals(LocationUpdateState.SUSPENDED, diagnostics.state.value.locationUpdateState)
+        assertEquals(null, diagnostics.state.value.requestedLocationIntervalMillis)
+        assertEquals(
+            RequestedIntervalReason.SUSPENDED_WHILE_STILL,
+            diagnostics.state.value.intervalReason,
+        )
+
+        orchestrator.stop(endedAtMillis = 2_000)
+
+        assertFalse(diagnostics.state.value.trackingActive)
+    }
+
+    @Test
     fun stillStopsLocationUntilMovementResumesIt() = runBlocking {
         val locationUpdates = FakeRecordingLocationUpdates()
         val activityUpdates = FakeRecordingActivityUpdates()
@@ -144,10 +194,12 @@ class RecordingSessionOrchestratorTest {
     fun speedCanEscalateButNotRelaxTheCurrentInterval() = runBlocking {
         val locationUpdates = FakeRecordingLocationUpdates()
         val activityUpdates = FakeRecordingActivityUpdates()
+        val diagnostics = LiveTrackingDiagnostics()
         val orchestrator = RecordingSessionOrchestrator(
             FakeRecordingSessionGateway(),
             locationUpdates,
             activityUpdates,
+            diagnostics,
         )
         val coordinate = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
 
@@ -164,10 +216,52 @@ class RecordingSessionOrchestratorTest {
         )
 
         assertEquals(listOf(10_000L, 5_000L, 1_000L), locationUpdates.updatedIntervals)
+        assertEquals(1_000L, diagnostics.state.value.requestedLocationIntervalMillis)
+        assertEquals(RequestedIntervalReason.SPEED_OVERRIDE, diagnostics.state.value.intervalReason)
+        assertEquals(RecordingActivity.WALKING, diagnostics.state.value.activityMode)
+    }
+
+    @Test
+    fun liveDiagnosticsExplainTheLatestRejectedFix() = runBlocking {
+        val locationUpdates = FakeRecordingLocationUpdates()
+        val diagnostics = LiveTrackingDiagnostics()
+        val orchestrator = RecordingSessionOrchestrator(
+            gateway = FakeRecordingSessionGateway(
+                decision = RecordingLocationDecision(
+                    accepted = false,
+                    rejectionReason = "accuracy_exceeds_recording_limit",
+                ),
+            ),
+            locationUpdates = locationUpdates,
+            activityUpdates = FakeRecordingActivityUpdates(),
+            diagnostics = diagnostics,
+        )
+        val fix = RecordingLocationFix(
+            coordinate = GeoCoordinate(latitude = 59.9109, longitude = 10.7522),
+            capturedAtMillis = 2_000,
+            accuracyMeters = 34.0,
+        )
+
+        orchestrator.start(startedAtMillis = 1_000)
+        locationUpdates.emit(fix)
+
+        assertEquals(
+            LatestFixDiagnostics(
+                capturedAtMillis = 2_000,
+                accuracyMeters = 34.0,
+                accepted = false,
+                rejectionReason = "accuracy_exceeds_recording_limit",
+            ),
+            diagnostics.state.value.latestFix,
+        )
     }
 
     private class FakeRecordingSessionGateway(
         private val activeSessionId: Long? = null,
+        private val decision: RecordingLocationDecision = RecordingLocationDecision(
+            accepted = true,
+            rejectionReason = null,
+        ),
     ) : RecordingSessionGateway {
         var startCount = 0
         val recorded = mutableListOf<Pair<Long, RecordingLocationFix>>()
@@ -185,7 +279,7 @@ class RecordingSessionOrchestratorTest {
             fix: RecordingLocationFix,
         ): RecordingLocationDecision {
             recorded += sessionId to fix
-            return RecordingLocationDecision(accepted = true, rejectionReason = null)
+            return decision
         }
 
         override suspend fun stop(sessionId: Long, endedAtMillis: Long) {

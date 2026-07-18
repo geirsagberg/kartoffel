@@ -15,6 +15,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
+import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnosticsState
+import net.sagberg.kartoffel.diagnostics.LocationUpdateState
+import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
+import net.sagberg.kartoffel.tracking.RecordingActivity
 import org.junit.Rule
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -33,6 +38,8 @@ class CoverageMapContentTest {
         compose.onNodeWithTag("passive_tracking_status").assertIsDisplayed()
         compose.onNodeWithTag("recording_session_control").assertIsDisplayed()
         compose.onNodeWithTag("settings_diagnostics_menu").assertIsDisplayed()
+        compose.onNodeWithTag("start_recording_icon", useUnmergedTree = true).assertIsDisplayed()
+        compose.onAllNodesWithText("Walking · 5 s").assertCountEquals(0)
     }
 
     @Test
@@ -72,8 +79,121 @@ class CoverageMapContentTest {
 
         compose.onNodeWithText("Start").performClick()
         compose.runOnIdle { assertEquals(true, requestedRecording.value) }
+        compose.onNodeWithTag("stop_recording_icon", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Stop").performClick()
         compose.runOnIdle { assertEquals(false, requestedRecording.value) }
+    }
+
+    @Test
+    fun liveDiagnosticsStayCompactUntilExpanded() {
+        compose.setContent {
+            MaterialTheme {
+                CoverageMapContent(
+                    hasLocationPermission = true,
+                    isRecordingSession = true,
+                    liveTrackingDiagnostics = LiveTrackingDiagnosticsState(
+                        trackingActive = true,
+                        activityMode = RecordingActivity.WALKING,
+                        locationUpdateState = LocationUpdateState.ACTIVE,
+                        requestedLocationIntervalMillis = 5_000,
+                        intervalReason = RequestedIntervalReason.SPEED_OVERRIDE,
+                        latestFix = LatestFixDiagnostics(
+                            capturedAtMillis = 2_000,
+                            accuracyMeters = 34.0,
+                            accepted = false,
+                            rejectionReason = "accuracy_exceeds_recording_limit",
+                        ),
+                    ),
+                    diagnosticsNowMillis = 12_000,
+                    onRequestLocationPermission = {},
+                    onStartRecordingSession = {},
+                    onStopRecordingSession = {},
+                    onCenterCurrentLocation = {},
+                    map = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Walking · 5 s").assertIsDisplayed()
+        compose.onAllNodesWithText("Speed override").assertCountEquals(0)
+
+        compose.onNodeWithTag("live_diagnostics_panel").performClick()
+
+        compose.onNodeWithText("Location updates: Active").assertIsDisplayed()
+        compose.onNodeWithText("Interval reason: Speed override").assertIsDisplayed()
+        compose.onNodeWithText("Last fix: 10 s ago").assertIsDisplayed()
+        compose.onNodeWithText(
+            "Latest fix: Rejected · 34 m · Accuracy exceeds recording limit",
+        ).assertIsDisplayed()
+        compose.onAllNodesWithText("History").assertCountEquals(0)
+    }
+
+    @Test
+    fun liveDiagnosticsExplainTheSafeFallbackAndAcceptedFix() {
+        compose.setContent {
+            MaterialTheme {
+                CoverageMapContent(
+                    hasLocationPermission = true,
+                    isRecordingSession = true,
+                    liveTrackingDiagnostics = LiveTrackingDiagnosticsState(
+                        trackingActive = true,
+                        activityMode = RecordingActivity.UNKNOWN,
+                        locationUpdateState = LocationUpdateState.ACTIVE,
+                        requestedLocationIntervalMillis = 5_000,
+                        intervalReason = RequestedIntervalReason.SAFE_FALLBACK,
+                        latestFix = LatestFixDiagnostics(
+                            capturedAtMillis = 1_000,
+                            accuracyMeters = 8.0,
+                            accepted = true,
+                            rejectionReason = null,
+                        ),
+                    ),
+                    diagnosticsNowMillis = 3_000,
+                    onRequestLocationPermission = {},
+                    onStartRecordingSession = {},
+                    onStopRecordingSession = {},
+                    onCenterCurrentLocation = {},
+                    map = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Unknown · 5 s fallback").assertIsDisplayed()
+        compose.onNodeWithTag("live_diagnostics_panel").performClick()
+        compose.onNodeWithText("Interval reason: Safe fallback").assertIsDisplayed()
+        compose.onNodeWithText("Last fix: 2 s ago").assertIsDisplayed()
+        compose.onNodeWithText("Latest fix: Accepted · 8 m").assertIsDisplayed()
+    }
+
+    @Test
+    fun liveDiagnosticsExplainSuspensionWhileStill() {
+        compose.setContent {
+            MaterialTheme {
+                CoverageMapContent(
+                    hasLocationPermission = true,
+                    isRecordingSession = true,
+                    liveTrackingDiagnostics = LiveTrackingDiagnosticsState(
+                        trackingActive = true,
+                        activityMode = RecordingActivity.STILL,
+                        locationUpdateState = LocationUpdateState.SUSPENDED,
+                        requestedLocationIntervalMillis = null,
+                        intervalReason = RequestedIntervalReason.SUSPENDED_WHILE_STILL,
+                    ),
+                    diagnosticsNowMillis = 3_000,
+                    onRequestLocationPermission = {},
+                    onStartRecordingSession = {},
+                    onStopRecordingSession = {},
+                    onCenterCurrentLocation = {},
+                    map = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Still · suspended").assertIsDisplayed()
+        compose.onNodeWithTag("live_diagnostics_panel").performClick()
+        compose.onNodeWithText("Location updates: Suspended").assertIsDisplayed()
+        compose.onNodeWithText("Interval reason: Suspended while still").assertIsDisplayed()
+        compose.onNodeWithText("Last fix: None").assertIsDisplayed()
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setCoverageMapContent(

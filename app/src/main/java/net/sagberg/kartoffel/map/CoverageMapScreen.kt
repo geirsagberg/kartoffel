@@ -6,16 +6,24 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,7 +38,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -58,13 +68,21 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.TileOverlay
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberTileOverlayState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import net.sagberg.kartoffel.R
 import net.sagberg.kartoffel.coverage.CoverageSnapshot
 import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
+import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
+import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnostics
+import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnosticsState
+import net.sagberg.kartoffel.diagnostics.LocationUpdateState
+import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
 import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.tracking.RecordingActivity
 import net.sagberg.kartoffel.tracking.RecordingSessionService
+import kotlin.math.roundToInt
 
 @Composable
 @SuppressLint("MissingPermission")
@@ -84,6 +102,16 @@ internal fun CoverageMapScreen() {
     var firstFix by remember { mutableStateOf<MapCoordinate?>(null) }
     var isRecordingSession by remember { mutableStateOf(false) }
     var centeredOnFirstFix by rememberSaveable { mutableStateOf(false) }
+    val liveTrackingDiagnostics by LiveTrackingDiagnostics.processInstance.state.collectAsState()
+    var diagnosticsNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(liveTrackingDiagnostics.trackingActive) {
+        if (!liveTrackingDiagnostics.trackingActive) return@LaunchedEffect
+        while (true) {
+            diagnosticsNowMillis = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -198,6 +226,8 @@ internal fun CoverageMapScreen() {
     CoverageMapContent(
         hasLocationPermission = hasLocationPermission,
         isRecordingSession = isRecordingSession,
+        liveTrackingDiagnostics = liveTrackingDiagnostics,
+        diagnosticsNowMillis = diagnosticsNowMillis,
         onRequestLocationPermission = {
             permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         },
@@ -244,6 +274,8 @@ internal fun CoverageMapScreen() {
 internal fun CoverageMapContent(
     hasLocationPermission: Boolean,
     isRecordingSession: Boolean,
+    liveTrackingDiagnostics: LiveTrackingDiagnosticsState = LiveTrackingDiagnosticsState(),
+    diagnosticsNowMillis: Long = System.currentTimeMillis(),
     onRequestLocationPermission: () -> Unit,
     onStartRecordingSession: () -> Unit,
     onStopRecordingSession: () -> Unit,
@@ -267,6 +299,16 @@ internal fun CoverageMapContent(
                 .testTag("coverage_map_screen"),
         ) {
             map()
+
+            if (liveTrackingDiagnostics.trackingActive) {
+                LiveTrackingDiagnosticsPanel(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(12.dp),
+                    diagnostics = liveTrackingDiagnostics,
+                    nowMillis = diagnosticsNowMillis,
+                )
+            }
 
             if (hasLocationPermission) {
                 FloatingActionButton(
@@ -306,6 +348,113 @@ internal fun CoverageMapContent(
     }
 }
 
+@Composable
+private fun LiveTrackingDiagnosticsPanel(
+    diagnostics: LiveTrackingDiagnosticsState,
+    nowMillis: Long,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier
+            .widthIn(max = 360.dp)
+            .fillMaxWidth()
+            .testTag("live_diagnostics_panel")
+            .clickable { expanded = !expanded },
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = diagnostics.compactStatus,
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = if (expanded) "Hide" else "Details",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            if (expanded) {
+                Text("Location updates: ${diagnostics.locationUpdateState.displayName}")
+                diagnostics.intervalReason?.let { reason ->
+                    Text("Interval reason: ${reason.displayName}")
+                }
+                Text("Last fix: ${diagnostics.latestFix.lastFixAge(nowMillis)}")
+                Text("Latest fix: ${diagnostics.latestFix.displayDecision()}")
+            }
+        }
+    }
+}
+
+private val LiveTrackingDiagnosticsState.compactStatus: String
+    get() {
+        val suffix = if (intervalReason == RequestedIntervalReason.SAFE_FALLBACK) {
+            " fallback"
+        } else {
+            ""
+        }
+        return "${activityMode.displayName} · " +
+            "${requestedLocationIntervalMillis.displayInterval()}$suffix"
+    }
+
+private val RecordingActivity.displayName: String
+    get() = when (this) {
+        RecordingActivity.STILL -> "Still"
+        RecordingActivity.WALKING -> "Walking"
+        RecordingActivity.RUNNING -> "Running"
+        RecordingActivity.ON_BICYCLE -> "Cycling"
+        RecordingActivity.IN_VEHICLE -> "In vehicle"
+        RecordingActivity.UNKNOWN -> "Unknown"
+    }
+
+private val LocationUpdateState.displayName: String
+    get() = when (this) {
+        LocationUpdateState.INACTIVE -> "Inactive"
+        LocationUpdateState.ACTIVE -> "Active"
+        LocationUpdateState.SUSPENDED -> "Suspended"
+    }
+
+private val RequestedIntervalReason.displayName: String
+    get() = when (this) {
+        RequestedIntervalReason.SESSION_START -> "Session start"
+        RequestedIntervalReason.ACTIVITY_MODE -> "Activity mode"
+        RequestedIntervalReason.SPEED_OVERRIDE -> "Speed override"
+        RequestedIntervalReason.SAFE_FALLBACK -> "Safe fallback"
+        RequestedIntervalReason.SUSPENDED_WHILE_STILL -> "Suspended while still"
+    }
+
+private fun Long?.displayInterval(): String = when (this) {
+    null -> "suspended"
+    else -> "${this / 1_000} s"
+}
+
+private fun LatestFixDiagnostics?.lastFixAge(nowMillis: Long): String {
+    val fix = this ?: return "None"
+    val ageSeconds = ((nowMillis - fix.capturedAtMillis).coerceAtLeast(0L) / 1_000)
+    return if (ageSeconds < 60) {
+        "$ageSeconds s ago"
+    } else {
+        "${ageSeconds / 60} min ago"
+    }
+}
+
+private fun LatestFixDiagnostics?.displayDecision(): String {
+    val fix = this ?: return "None"
+    val result = if (fix.accepted) "Accepted" else "Rejected"
+    val accuracy = "${fix.accuracyMeters.roundToInt()} m"
+    val reason = fix.rejectionReason?.replace('_', ' ')?.replaceFirstChar(Char::uppercase)
+    return listOfNotNull(result, accuracy, reason).joinToString(" · ")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CoverageMapTopAppBar(
@@ -336,6 +485,16 @@ private fun CoverageMapTopAppBar(
                     onStartRecordingSession
                 },
             ) {
+                Icon(
+                    modifier = Modifier.testTag(
+                        if (isRecordingSession) "stop_recording_icon" else "start_recording_icon",
+                    ),
+                    painter = painterResource(
+                        if (isRecordingSession) R.drawable.ic_stop_20 else R.drawable.ic_record_20,
+                    ),
+                    contentDescription = null,
+                )
+                Spacer(Modifier.width(8.dp))
                 Text(if (isRecordingSession) "Stop" else "Start")
             }
             IconButton(

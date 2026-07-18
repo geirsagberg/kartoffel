@@ -2,6 +2,8 @@ package net.sagberg.kartoffel.tracking
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
+import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnostics
 
 internal interface RecordingSessionGateway {
     suspend fun activeSessionId(): Long? = null
@@ -48,6 +50,7 @@ internal class RecordingSessionOrchestrator(
     private val gateway: RecordingSessionGateway,
     private val locationUpdates: RecordingLocationUpdates,
     private val activityUpdates: RecordingActivityUpdates,
+    private val diagnostics: LiveTrackingDiagnostics = LiveTrackingDiagnostics(),
 ) {
     private val mutex = Mutex()
     private var activeSessionId: Long? = null
@@ -76,11 +79,20 @@ internal class RecordingSessionOrchestrator(
         stopLocationUpdates()
         activeSessionId = null
         gateway.stop(sessionId, endedAtMillis)
+        diagnostics.sessionStopped()
     }
 
     private suspend fun record(fix: RecordingLocationFix) = mutex.withLock {
         activeSessionId?.let { sessionId ->
-            gateway.record(sessionId, fix)
+            val decision = gateway.record(sessionId, fix)
+            diagnostics.fixReceived(
+                LatestFixDiagnostics(
+                    capturedAtMillis = fix.capturedAtMillis,
+                    accuracyMeters = fix.accuracyMeters,
+                    accepted = decision.accepted,
+                    rejectionReason = decision.rejectionReason,
+                ),
+            )
             speedInterval(fix.speedMetersPerSecond)?.let(::useFasterInterval)
         }
     }
@@ -96,6 +108,7 @@ internal class RecordingSessionOrchestrator(
             locationUpdates.updateInterval(intervalMillis)
             currentIntervalMillis = intervalMillis
         }
+        diagnostics.activityModeChanged(activity, intervalMillis)
     }
 
     private fun startLocationUpdates(intervalMillis: Long) {
@@ -107,7 +120,9 @@ internal class RecordingSessionOrchestrator(
     private fun activate(sessionId: Long) {
         activeSessionId = sessionId
         startLocationUpdates(DEFAULT_RECORDING_INTERVAL_MILLIS)
+        diagnostics.sessionStarted(DEFAULT_RECORDING_INTERVAL_MILLIS)
         runCatching { activityUpdates.start(::onActivity) }
+            .onFailure { diagnostics.activityRecognitionUnavailable() }
     }
 
     private fun stopLocationUpdates() {
@@ -123,6 +138,7 @@ internal class RecordingSessionOrchestrator(
         if (intervalMillis < current) {
             locationUpdates.updateInterval(intervalMillis)
             currentIntervalMillis = intervalMillis
+            diagnostics.intervalAcceleratedBySpeed(intervalMillis)
         }
     }
 }

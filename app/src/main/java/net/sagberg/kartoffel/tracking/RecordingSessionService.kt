@@ -16,6 +16,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import net.sagberg.kartoffel.R
+import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnostics
 import net.sagberg.kartoffel.storage.KartoffelDatabase
 
 internal class RecordingSessionService : Service() {
@@ -35,6 +36,7 @@ internal class RecordingSessionService : Service() {
             gateway = RecordingSessionRecorder(database),
             locationUpdates = locationUpdates,
             activityUpdates = activityUpdates,
+            diagnostics = LiveTrackingDiagnostics.processInstance,
         )
         createNotificationChannel()
         serviceScope.launch {
