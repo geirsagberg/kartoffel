@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -33,12 +34,13 @@ class CoverageMapContentTest {
         compose.setCoverageMapContent(hasLocationPermission = false)
 
         compose.onNodeWithTag("fake_google_map").assertIsDisplayed()
-        compose.onNodeWithText("Enable location").assertIsDisplayed()
+        compose.onNodeWithText("Enable location", useUnmergedTree = true).assertIsDisplayed()
         compose.onAllNodesWithContentDescription("Center on current location").assertCountEquals(0)
         compose.onNodeWithTag("passive_tracking_status").assertIsDisplayed()
-        compose.onNodeWithTag("recording_session_control").assertIsDisplayed()
+        compose.onNodeWithTag("enable_location_control").assertIsDisplayed()
+        compose.onAllNodesWithTag("recording_session_control").assertCountEquals(0)
         compose.onNodeWithTag("settings_diagnostics_menu").assertIsDisplayed()
-        compose.onNodeWithTag("start_recording_icon", useUnmergedTree = true).assertIsDisplayed()
+        compose.onAllNodesWithTag("start_recording_icon", useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithText("Walking · 5 s").assertCountEquals(0)
     }
 
@@ -77,10 +79,13 @@ class CoverageMapContentTest {
             }
         }
 
-        compose.onNodeWithText("Start").performClick()
+        compose.onNodeWithText("Start recording", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("recording_session_control").performClick()
         compose.runOnIdle { assertEquals(true, requestedRecording.value) }
         compose.onNodeWithTag("stop_recording_icon", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Stop").performClick()
+        compose.onNodeWithText("Recording · Passive off").assertIsDisplayed()
+        compose.onNodeWithText("Stop recording", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("recording_session_control").performClick()
         compose.runOnIdle { assertEquals(false, requestedRecording.value) }
     }
 

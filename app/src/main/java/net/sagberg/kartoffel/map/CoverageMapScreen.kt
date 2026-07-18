@@ -22,11 +22,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -83,6 +83,7 @@ import net.sagberg.kartoffel.storage.KartoffelDatabase
 import net.sagberg.kartoffel.tracking.RecordingActivity
 import net.sagberg.kartoffel.tracking.RecordingSessionService
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.seconds
 
 @Composable
 @SuppressLint("MissingPermission")
@@ -109,7 +110,7 @@ internal fun CoverageMapScreen() {
         if (!liveTrackingDiagnostics.trackingActive) return@LaunchedEffect
         while (true) {
             diagnosticsNowMillis = System.currentTimeMillis()
-            delay(1_000)
+            delay(1.seconds)
         }
     }
 
@@ -287,8 +288,6 @@ internal fun CoverageMapContent(
         topBar = {
             CoverageMapTopAppBar(
                 isRecordingSession = isRecordingSession,
-                onStartRecordingSession = onStartRecordingSession,
-                onStopRecordingSession = onStopRecordingSession,
             )
         },
     ) { contentPadding ->
@@ -310,39 +309,79 @@ internal fun CoverageMapContent(
                 )
             }
 
-            if (hasLocationPermission) {
-                FloatingActionButton(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .padding(end = 16.dp, bottom = 24.dp)
-                        .size(48.dp),
-                    onClick = onCenterCurrentLocation,
-                    shape = CircleShape,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 6.dp,
-                        pressedElevation = 8.dp,
-                    ),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_my_location_24),
-                        contentDescription = "Center on current location",
-                    )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 24.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (hasLocationPermission) {
+                    FloatingActionButton(
+                        modifier = Modifier.size(48.dp),
+                        onClick = onCenterCurrentLocation,
+                        shape = CircleShape,
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        elevation = FloatingActionButtonDefaults.elevation(
+                            defaultElevation = 2.dp,
+                            pressedElevation = 4.dp,
+                        ),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_my_location_24),
+                            contentDescription = "Center on current location",
+                        )
+                    }
                 }
-            }
 
-            if (!hasLocationPermission) {
-                Button(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(24.dp),
-                    onClick = onRequestLocationPermission,
-                ) {
-                    Text("Enable location")
-                }
+                ExtendedFloatingActionButton(
+                    modifier = Modifier.testTag(
+                        if (hasLocationPermission) {
+                            "recording_session_control"
+                        } else {
+                            "enable_location_control"
+                        },
+                    ),
+                    onClick = when {
+                        !hasLocationPermission -> onRequestLocationPermission
+                        isRecordingSession -> onStopRecordingSession
+                        else -> onStartRecordingSession
+                    },
+                    icon = {
+                        Icon(
+                            modifier = if (hasLocationPermission) {
+                                Modifier.testTag(
+                                    if (isRecordingSession) {
+                                        "stop_recording_icon"
+                                    } else {
+                                        "start_recording_icon"
+                                    },
+                                )
+                            } else {
+                                Modifier
+                            },
+                            painter = painterResource(
+                                when {
+                                    !hasLocationPermission -> R.drawable.ic_my_location_24
+                                    isRecordingSession -> R.drawable.ic_stop_24
+                                    else -> R.drawable.ic_record_24
+                                },
+                            ),
+                            contentDescription = null,
+                        )
+                    },
+                    text = {
+                        Text(
+                            when {
+                                !hasLocationPermission -> "Enable location"
+                                isRecordingSession -> "Stop recording"
+                                else -> "Start recording"
+                            },
+                        )
+                    },
+                )
             }
         }
     }
@@ -459,8 +498,6 @@ private fun LatestFixDiagnostics?.displayDecision(): String {
 @Composable
 private fun CoverageMapTopAppBar(
     isRecordingSession: Boolean,
-    onStartRecordingSession: () -> Unit,
-    onStopRecordingSession: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -470,33 +507,21 @@ private fun CoverageMapTopAppBar(
                 Text("Kartoffel")
                 Text(
                     modifier = Modifier.testTag("passive_tracking_status"),
-                    text = "Passive off",
+                    text = if (isRecordingSession) {
+                        "Recording · Passive off"
+                    } else {
+                        "Passive off"
+                    },
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isRecordingSession) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         },
         actions = {
-            Button(
-                modifier = Modifier.testTag("recording_session_control"),
-                onClick = if (isRecordingSession) {
-                    onStopRecordingSession
-                } else {
-                    onStartRecordingSession
-                },
-            ) {
-                Icon(
-                    modifier = Modifier.testTag(
-                        if (isRecordingSession) "stop_recording_icon" else "start_recording_icon",
-                    ),
-                    painter = painterResource(
-                        if (isRecordingSession) R.drawable.ic_stop_20 else R.drawable.ic_record_20,
-                    ),
-                    contentDescription = null,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(if (isRecordingSession) "Stop" else "Start")
-            }
             IconButton(
                 modifier = Modifier.testTag("settings_diagnostics_menu"),
                 onClick = { menuExpanded = true },
