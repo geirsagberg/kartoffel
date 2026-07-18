@@ -191,6 +191,69 @@ class RecordingSessionOrchestratorTest {
     }
 
     @Test
+    fun firstConfidentActivitySampleReplacesUnknownAndStopsBootstrapSampling() = runBlocking {
+        val locationUpdates = FakeRecordingLocationUpdates()
+        val activityUpdates = FakeRecordingActivityUpdates()
+        val diagnostics = LiveTrackingDiagnostics()
+        val orchestrator = RecordingSessionOrchestrator(
+            FakeRecordingSessionGateway(),
+            locationUpdates,
+            activityUpdates,
+            diagnostics,
+        )
+
+        orchestrator.start(startedAtMillis = 1_000)
+        activityUpdates.emitBootstrap(RecordingActivity.WALKING, confidence = 74)
+
+        assertEquals(RecordingActivity.UNKNOWN, diagnostics.state.value.activityMode)
+        assertEquals(0, activityUpdates.stopBootstrapCount)
+
+        activityUpdates.emitBootstrap(RecordingActivity.WALKING, confidence = 75)
+
+        assertEquals(RecordingActivity.WALKING, diagnostics.state.value.activityMode)
+        assertEquals(10_000L, diagnostics.state.value.requestedLocationIntervalMillis)
+        assertEquals(1, activityUpdates.stopBootstrapCount)
+    }
+
+    @Test
+    fun activityTransitionPreventsALaterBootstrapSampleFromReplacingTheMode() = runBlocking {
+        val activityUpdates = FakeRecordingActivityUpdates()
+        val diagnostics = LiveTrackingDiagnostics()
+        val orchestrator = RecordingSessionOrchestrator(
+            FakeRecordingSessionGateway(),
+            FakeRecordingLocationUpdates(),
+            activityUpdates,
+            diagnostics,
+        )
+
+        orchestrator.start(startedAtMillis = 1_000)
+        activityUpdates.emit(RecordingActivity.WALKING)
+        activityUpdates.emitBootstrap(RecordingActivity.STILL, confidence = 90)
+
+        assertEquals(RecordingActivity.WALKING, diagnostics.state.value.activityMode)
+        assertEquals(1, activityUpdates.stopBootstrapCount)
+    }
+
+    @Test
+    fun onlyTheFirstConfidentBootstrapSampleSeedsTheActivityMode() = runBlocking {
+        val activityUpdates = FakeRecordingActivityUpdates()
+        val diagnostics = LiveTrackingDiagnostics()
+        val orchestrator = RecordingSessionOrchestrator(
+            FakeRecordingSessionGateway(),
+            FakeRecordingLocationUpdates(),
+            activityUpdates,
+            diagnostics,
+        )
+
+        orchestrator.start(startedAtMillis = 1_000)
+        activityUpdates.emitBootstrap(RecordingActivity.WALKING, confidence = 80)
+        activityUpdates.emitBootstrap(RecordingActivity.STILL, confidence = 90)
+
+        assertEquals(RecordingActivity.WALKING, diagnostics.state.value.activityMode)
+        assertEquals(1, activityUpdates.stopBootstrapCount)
+    }
+
+    @Test
     fun speedCanEscalateButNotRelaxTheCurrentInterval() = runBlocking {
         val locationUpdates = FakeRecordingLocationUpdates()
         val activityUpdates = FakeRecordingActivityUpdates()
@@ -319,11 +382,12 @@ class RecordingSessionOrchestratorTest {
         private val failOnStart: Boolean = false,
     ) : RecordingActivityUpdates {
         var startCount = 0
+        var stopBootstrapCount = 0
         var started = false
         var stopped = false
-        private var listener: (suspend (RecordingActivity) -> Unit)? = null
+        private var listener: (suspend (RecordingActivityUpdate) -> Unit)? = null
 
-        override fun start(listener: suspend (RecordingActivity) -> Unit) {
+        override fun start(listener: suspend (RecordingActivityUpdate) -> Unit) {
             startCount += 1
             if (failOnStart) throw SecurityException("Activity recognition unavailable")
             started = true
@@ -335,8 +399,18 @@ class RecordingSessionOrchestratorTest {
             listener = null
         }
 
+        override fun stopBootstrap() {
+            stopBootstrapCount += 1
+        }
+
         suspend fun emit(activity: RecordingActivity) {
-            checkNotNull(listener)(activity)
+            checkNotNull(listener)(RecordingActivityUpdate.Transition(activity))
+        }
+
+        suspend fun emitBootstrap(activity: RecordingActivity, confidence: Int) {
+            checkNotNull(listener)(
+                RecordingActivityUpdate.BootstrapSample(activity, confidence),
+            )
         }
     }
 }

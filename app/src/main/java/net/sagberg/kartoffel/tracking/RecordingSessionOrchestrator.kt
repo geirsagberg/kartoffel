@@ -38,13 +38,33 @@ internal enum class RecordingActivity {
     UNKNOWN,
 }
 
+internal sealed interface RecordingActivityUpdate {
+    val activity: RecordingActivity
+
+    data class Transition(
+        override val activity: RecordingActivity,
+    ) : RecordingActivityUpdate
+
+    data class BootstrapSample(
+        override val activity: RecordingActivity,
+        val confidence: Int,
+    ) : RecordingActivityUpdate {
+        init {
+            require(confidence in 0..100)
+        }
+    }
+}
+
 internal interface RecordingActivityUpdates {
-    fun start(listener: suspend (RecordingActivity) -> Unit)
+    fun start(listener: suspend (RecordingActivityUpdate) -> Unit)
+
+    fun stopBootstrap()
 
     fun stop()
 }
 
 internal const val DEFAULT_RECORDING_INTERVAL_MILLIS = 5_000L
+internal const val MINIMUM_BOOTSTRAP_ACTIVITY_CONFIDENCE = 75
 
 internal class RecordingSessionOrchestrator(
     private val gateway: RecordingSessionGateway,
@@ -56,6 +76,7 @@ internal class RecordingSessionOrchestrator(
     private var activeSessionId: Long? = null
     private var locationUpdatesActive = false
     private var currentIntervalMillis: Long? = null
+    private var bootstrapCanSeedActivity = false
 
     val isRecording: Boolean
         get() = activeSessionId != null
@@ -76,6 +97,7 @@ internal class RecordingSessionOrchestrator(
     suspend fun stop(endedAtMillis: Long) = mutex.withLock {
         val sessionId = activeSessionId ?: gateway.activeSessionId() ?: return@withLock
         activityUpdates.stop()
+        bootstrapCanSeedActivity = false
         stopLocationUpdates()
         activeSessionId = null
         gateway.stop(sessionId, endedAtMillis)
@@ -97,8 +119,27 @@ internal class RecordingSessionOrchestrator(
         }
     }
 
-    private suspend fun onActivity(activity: RecordingActivity) = mutex.withLock {
+    private suspend fun onActivity(update: RecordingActivityUpdate) = mutex.withLock {
         if (activeSessionId == null) return@withLock
+        when (update) {
+            is RecordingActivityUpdate.BootstrapSample -> {
+                if (
+                    !bootstrapCanSeedActivity ||
+                    update.confidence < MINIMUM_BOOTSTRAP_ACTIVITY_CONFIDENCE
+                ) {
+                    return@withLock
+                }
+                bootstrapCanSeedActivity = false
+                activityUpdates.stopBootstrap()
+            }
+            is RecordingActivityUpdate.Transition -> {
+                if (bootstrapCanSeedActivity) {
+                    bootstrapCanSeedActivity = false
+                    activityUpdates.stopBootstrap()
+                }
+            }
+        }
+        val activity = update.activity
         val intervalMillis = activity.intervalMillis
         if (intervalMillis == null) {
             stopLocationUpdates()
@@ -119,10 +160,14 @@ internal class RecordingSessionOrchestrator(
 
     private fun activate(sessionId: Long) {
         activeSessionId = sessionId
+        bootstrapCanSeedActivity = true
         startLocationUpdates(DEFAULT_RECORDING_INTERVAL_MILLIS)
         diagnostics.sessionStarted(DEFAULT_RECORDING_INTERVAL_MILLIS)
         runCatching { activityUpdates.start(::onActivity) }
-            .onFailure { diagnostics.activityRecognitionUnavailable() }
+            .onFailure {
+                bootstrapCanSeedActivity = false
+                diagnostics.activityRecognitionUnavailable()
+            }
     }
 
     private fun stopLocationUpdates() {

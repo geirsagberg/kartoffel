@@ -51,13 +51,13 @@ internal class RecordingSessionService : Service() {
                         stopForeground(STOP_FOREGROUND_REMOVE)
                         stopSelfResult(command.startId)
                     }
-                    is RecordingCommand.ActivityTransition -> {
+                    is RecordingCommand.ActivityUpdate -> {
                         if (!orchestrator.resumeActiveSession()) {
                             stopSelfResult(command.startId)
                             continue
                         }
                         promoteToForeground()
-                        activityUpdates.handleTransitionIntent(command.intent)
+                        activityUpdates.handleActivityIntent(command.intent)
                     }
                 }
             }
@@ -73,9 +73,11 @@ internal class RecordingSessionService : Service() {
                     endedAtMillis = System.currentTimeMillis(),
                 ),
             )
-            FusedRecordingActivityUpdates.ACTION_ACTIVITY_TRANSITION -> {
+            FusedRecordingActivityUpdates.ACTION_ACTIVITY_TRANSITION,
+            FusedRecordingActivityUpdates.ACTION_ACTIVITY_BOOTSTRAP,
+            -> {
                 commands.trySend(
-                    RecordingCommand.ActivityTransition(
+                    RecordingCommand.ActivityUpdate(
                         startId = startId,
                         intent = checkNotNull(intent),
                     ),
@@ -171,7 +173,7 @@ internal class RecordingSessionService : Service() {
             val endedAtMillis: Long,
         ) : RecordingCommand
 
-        data class ActivityTransition(
+        data class ActivityUpdate(
             override val startId: Int,
             val intent: Intent,
         ) : RecordingCommand
