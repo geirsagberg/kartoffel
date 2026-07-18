@@ -6,6 +6,7 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -96,6 +97,27 @@ class KartoffelDatabaseTest {
         assertEquals(2_000L, dao.find(laterId)?.capturedAtMillis)
         assertEquals(listOf(earlierId, laterId), dao.between(500, 2_500).map { it.id })
         assertNull(dao.find(Long.MAX_VALUE))
+    }
+
+    @Test
+    fun passiveTrackingPreferenceDefaultsOffAndRoundTrips() = runBlocking {
+        val preferences = PassiveTrackingPreferences(database.trackingSettings())
+
+        assertEquals(false, preferences.observe().first().enabled)
+
+        preferences.enable(passivePeriodStartedAtMillis = 12_000)
+
+        assertEquals(
+            PassiveTrackingPreference(
+                enabled = true,
+                passivePeriodStartedAtMillis = 12_000,
+            ),
+            preferences.observe().first(),
+        )
+
+        preferences.disable()
+
+        assertEquals(false, preferences.observe().first().enabled)
     }
 
     private fun sample(

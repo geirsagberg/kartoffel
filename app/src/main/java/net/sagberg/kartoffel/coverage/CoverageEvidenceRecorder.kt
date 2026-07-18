@@ -26,7 +26,18 @@ internal data class CoverageEvidenceRules(
     val trigger: String?,
     val maximumAccuracyMeters: Double,
     val accuracyRejectionReason: String,
+    val shortGapInterpolation: ShortGapInterpolationPolicy? = null,
 )
+
+internal data class ShortGapInterpolationPolicy(
+    val maximumGapMillis: Long,
+    val eligiblePreviousTriggers: Set<String>,
+) {
+    init {
+        require(maximumGapMillis > 0)
+        require(eligiblePreviousTriggers.isNotEmpty())
+    }
+}
 
 internal data class CoverageLocationDecision(
     val accepted: Boolean,
@@ -58,6 +69,19 @@ internal class CoverageEvidenceRecorder(
         val cell = if (decision.accepted) coverageCells.cellAt(fix.coordinate) else null
 
         database.withWriteTransaction {
+            val previousPassiveSample = if (
+                recordingSessionId == null &&
+                decision.accepted &&
+                rules.shortGapInterpolation != null
+            ) {
+                database.locationSamples().lastAcceptedBefore(
+                    source = rules.source.persistedName,
+                    capturedAtMillis = fix.capturedAtMillis,
+                    eligibleTriggers = rules.shortGapInterpolation.eligiblePreviousTriggers,
+                )
+            } else {
+                null
+            }
             val sample = LocationSampleEntity(
                 capturedAtMillis = fix.capturedAtMillis,
                 latitude = fix.coordinate.latitude,
@@ -94,6 +118,27 @@ internal class CoverageEvidenceRecorder(
                                 sample = sample.copy(id = sampleId),
                                 cellId = acceptedCell.value,
                             ),
+                        )
+                    }
+                } else if (
+                    previousPassiveSample != null &&
+                    fix.capturedAtMillis - previousPassiveSample.capturedAtMillis <=
+                    checkNotNull(rules.shortGapInterpolation).maximumGapMillis
+                ) {
+                    coverageCells.intermediateCellsForShortGap(
+                        start = coverageCells.cellAt(
+                            GeoCoordinate(
+                                latitude = previousPassiveSample.latitude,
+                                longitude = previousPassiveSample.longitude,
+                            ),
+                        ),
+                        destination = acceptedCell,
+                    ).forEach { inferredCell ->
+                        database.coverageCells().upsert(
+                            cellId = inferredCell.value,
+                            firstSeenAtMillis = fix.capturedAtMillis,
+                            lastSeenAtMillis = fix.capturedAtMillis,
+                            evidenceMask = evidenceMaskOf(rules.source),
                         )
                     }
                 }

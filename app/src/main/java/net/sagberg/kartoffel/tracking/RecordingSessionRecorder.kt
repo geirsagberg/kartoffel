@@ -64,7 +64,7 @@ internal class RecordingSessionRecorder(
     }
 }
 
-private val RecordingActivity.persistedMode: PersistedActivityMode
+internal val RecordingActivity.persistedMode: PersistedActivityMode
     get() = when (this) {
         RecordingActivity.STILL -> PersistedActivityMode.STILL
         RecordingActivity.WALKING -> PersistedActivityMode.WALKING

@@ -15,14 +15,28 @@ internal val MIGRATION_2_3 = Migration(2, 3) { connection ->
     )
 }
 
+internal val MIGRATION_3_4 = Migration(3, 4) { connection ->
+    connection.execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS tracking_settings (
+            id INTEGER NOT NULL,
+            passive_enabled INTEGER NOT NULL,
+            passive_period_started_at_ms INTEGER,
+            PRIMARY KEY(id)
+        )
+        """.trimIndent(),
+    )
+}
+
 @Database(
     entities = [
         CoverageCellEntity::class,
         LocationSampleEntity::class,
         RecordingSessionEntity::class,
         RecordingSessionPointEntity::class,
+        TrackingSettingsEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 internal abstract class KartoffelDatabase : RoomDatabase() {
@@ -33,6 +47,8 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
     abstract fun recordingSessions(): RecordingSessionDao
 
     abstract fun recordingSessionPoints(): RecordingSessionPointDao
+
+    abstract fun trackingSettings(): TrackingSettingsDao
 
     companion object {
         @Volatile
@@ -46,7 +62,7 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
                     "kartoffel.db",
                 )
                 .setDriver(AndroidSQLiteDriver())
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
                 .build()
                 .also { instance = it }

@@ -23,9 +23,12 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 - **Accuracy-Gated Clearing:** rejecting evidence that is too inaccurate to clear fog safely.
 - **Conservative Interpolation:** filling short, plausible gaps between samples. When several equally short local routes are credible, all may be filled.
 - **Passive Gap:** a visited place left covered because passive evidence was insufficient.
-- **Passive Tracking:** opt-in capture without starting a Recording Session.
+- **Tracking Mode:** the current coverage-capture policy: Off, Passive, or Recording Session. Only one mode operates at a time; a Recording Session temporarily overrides Passive Tracking and stopping it returns to Passive when the durable opt-in remains enabled, otherwise Off.
+- **Passive Tracking:** durable, best-effort opt-in capture that remains enabled until explicitly disabled, does not require starting a Recording Session, and may leave Passive Gaps when Android limits background delivery.
+- **Passive Capture Window:** a self-terminating period that may collect multiple independently accuracy-gated fixes after a movement signal or conservative fallback while Passive Tracking is enabled. It ends at a time limit, a delivered-fix limit, or an earlier stationary signal; rejected fixes consume the delivery limit.
+- **Opportunistic Fix:** a location fix derived for another system client and received by Kartoffel without causing additional location work. While Tracking Mode is Passive, an accurate Opportunistic Fix may clear its own Coverage Cell but does not open or extend a Passive Capture Window or justify automatic interpolation.
 - **Recording Session:** deliberate, higher-fidelity capture for a route the user cares about.
-- **Activity Mode:** the most recently recognized movement state when a location fix was received. `Unknown` covers both unavailable recognition and the absence of a recognized state, including fixes retained from before Activity Mode was recorded.
+- **Activity Mode:** the most recently recognized movement state that can be credibly aligned with when a location fix was captured. `Unknown` covers unavailable, absent, stale, or time-unalignable recognition, including fixes retained from before Activity Mode was recorded.
 - **Requested Location Interval:** the location-update cadence Kartoffel asks Android to provide. It describes tracking policy, not the cadence Android actually delivers.
 - **Tracking Diagnostics:** a secondary tuning view for inspecting what tracking is doing and why coverage was or was not cleared. During the MVP it is an owner/developer instrument, not a polished end-user explanation.
 - **Evidence Compression:** reducing retained samples while preserving coverage and useful session history.

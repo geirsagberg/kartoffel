@@ -24,12 +24,12 @@ class KartoffelDatabaseMigrationTest {
     }
 
     @Test
-    fun migrationTwoToThreePreservesFixesAndRelationshipsWithUnknownMode() = runBlocking {
+    fun migrationsPreserveFixesAndRelationshipsAndAddPassivePreference() = runBlocking {
         createVersionTwoDatabase()
 
         val database = Room.databaseBuilder(context, KartoffelDatabase::class.java, databaseName)
             .setDriver(AndroidSQLiteDriver())
-            .addMigrations(MIGRATION_2_3)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
         try {
@@ -38,6 +38,7 @@ class KartoffelDatabaseMigrationTest {
             assertEquals(7L, sample?.recordingSessionId)
             assertNotNull(database.recordingSessions().find(7))
             assertEquals(11L, database.recordingSessionPoints().forSession(7).single().sampleId)
+            assertEquals(false, PassiveTrackingPreferences(database.trackingSettings()).current().enabled)
         } finally {
             database.close()
         }

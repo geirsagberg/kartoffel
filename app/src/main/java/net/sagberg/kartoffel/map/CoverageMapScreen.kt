@@ -53,6 +53,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -80,6 +83,9 @@ import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnosticsState
 import net.sagberg.kartoffel.diagnostics.LocationUpdateState
 import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
 import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.storage.PassiveTrackingPreference
+import net.sagberg.kartoffel.storage.PassiveTrackingPreferences
+import net.sagberg.kartoffel.tracking.PassiveTrackingManager
 import net.sagberg.kartoffel.tracking.RecordingActivity
 import net.sagberg.kartoffel.tracking.RecordingSessionService
 import kotlin.math.roundToInt
@@ -92,6 +98,7 @@ internal fun CoverageMapScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val fusedLocationClient = remember(context) {
         LocationServices.getFusedLocationProviderClient(context)
     }
@@ -103,7 +110,16 @@ internal fun CoverageMapScreen(
         mutableStateOf(context.hasForegroundLocationPermission())
     }
     var firstFix by remember { mutableStateOf<MapCoordinate?>(null) }
-    var isRecordingSession by remember { mutableStateOf(false) }
+    val activeRecordingSession by database.recordingSessions().observeActive().collectAsState(
+        initial = null,
+    )
+    val isRecordingSession = activeRecordingSession != null
+    val passiveTrackingPreferences = remember(database) {
+        PassiveTrackingPreferences(database.trackingSettings())
+    }
+    val passiveTrackingPreference by passiveTrackingPreferences.observe().collectAsState(
+        initial = PassiveTrackingPreference.Disabled,
+    )
     var centeredOnFirstFix by rememberSaveable { mutableStateOf(false) }
     val liveTrackingDiagnostics by LiveTrackingDiagnostics.processInstance.state.collectAsState()
     var diagnosticsNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -127,8 +143,35 @@ internal fun CoverageMapScreen(
         hasLocationPermission = context.hasForegroundLocationPermission()
         if (hasLocationPermission) {
             RecordingSessionService.start(context)
-            isRecordingSession = true
         }
+    }
+    val passiveBackgroundPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        scope.launch { PassiveTrackingManager.enable(context) }
+    }
+    val passiveForegroundPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        hasLocationPermission = context.hasForegroundLocationPermission()
+        if (hasLocationPermission) {
+            passiveBackgroundPermissionLauncher.launch(
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+            )
+        }
+    }
+
+    LaunchedEffect(context) {
+        PassiveTrackingManager.restore(context)
+    }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch { PassiveTrackingManager.reconcilePermissions(context) }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val fallbackCameraTarget = remember { LatLng(59.9139, 10.7522) }
@@ -149,12 +192,6 @@ internal fun CoverageMapScreen(
                 }
                 hasLoadedInitialCoverage = true
             }
-    }
-
-    LaunchedEffect(database) {
-        database.recordingSessions().observeActive().collect { activeSession ->
-            isRecordingSession = activeSession != null
-        }
     }
 
     fun moveToCurrentLocation(zoom: Float) {
@@ -229,6 +266,7 @@ internal fun CoverageMapScreen(
     CoverageMapContent(
         hasLocationPermission = hasLocationPermission,
         isRecordingSession = isRecordingSession,
+        isPassiveTrackingEnabled = passiveTrackingPreference.enabled,
         liveTrackingDiagnostics = liveTrackingDiagnostics,
         diagnosticsNowMillis = diagnosticsNowMillis,
         onRequestLocationPermission = {
@@ -245,9 +283,19 @@ internal fun CoverageMapScreen(
         },
         onStopRecordingSession = {
             RecordingSessionService.stop(context)
-            isRecordingSession = false
         },
         onCenterCurrentLocation = { moveToCurrentLocation(CURRENT_LOCATION_ZOOM) },
+        onEnablePassiveTracking = {
+            passiveForegroundPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACTIVITY_RECOGNITION,
+                ),
+            )
+        },
+        onDisablePassiveTracking = {
+            scope.launch { PassiveTrackingManager.disable(context) }
+        },
         onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
         map = {
             GoogleMap(
@@ -278,12 +326,15 @@ internal fun CoverageMapScreen(
 internal fun CoverageMapContent(
     hasLocationPermission: Boolean,
     isRecordingSession: Boolean,
+    isPassiveTrackingEnabled: Boolean = false,
     liveTrackingDiagnostics: LiveTrackingDiagnosticsState = LiveTrackingDiagnosticsState(),
     diagnosticsNowMillis: Long = System.currentTimeMillis(),
     onRequestLocationPermission: () -> Unit,
     onStartRecordingSession: () -> Unit,
     onStopRecordingSession: () -> Unit,
     onCenterCurrentLocation: () -> Unit,
+    onEnablePassiveTracking: () -> Unit = {},
+    onDisablePassiveTracking: () -> Unit = {},
     onOpenTrackingDiagnostics: () -> Unit = {},
     map: @Composable BoxScope.() -> Unit,
 ) {
@@ -292,6 +343,9 @@ internal fun CoverageMapContent(
         topBar = {
             CoverageMapTopAppBar(
                 isRecordingSession = isRecordingSession,
+                isPassiveTrackingEnabled = isPassiveTrackingEnabled,
+                onEnablePassiveTracking = onEnablePassiveTracking,
+                onDisablePassiveTracking = onDisablePassiveTracking,
                 onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
             )
         },
@@ -474,6 +528,9 @@ private val RequestedIntervalReason.displayName: String
         RequestedIntervalReason.SPEED_OVERRIDE -> "Speed override"
         RequestedIntervalReason.SAFE_FALLBACK -> "Safe fallback"
         RequestedIntervalReason.SUSPENDED_WHILE_STILL -> "Suspended while still"
+        RequestedIntervalReason.PASSIVE_INITIAL -> "Passive initial fix"
+        RequestedIntervalReason.PASSIVE_WINDOW -> "Passive capture window"
+        RequestedIntervalReason.OPPORTUNISTIC -> "Opportunistic fixes"
     }
 
 private fun Long?.displayInterval(): String = when (this) {
@@ -503,6 +560,9 @@ private fun LatestFixDiagnostics?.displayDecision(): String {
 @Composable
 private fun CoverageMapTopAppBar(
     isRecordingSession: Boolean,
+    isPassiveTrackingEnabled: Boolean,
+    onEnablePassiveTracking: () -> Unit,
+    onDisablePassiveTracking: () -> Unit,
     onOpenTrackingDiagnostics: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -514,7 +574,13 @@ private fun CoverageMapTopAppBar(
                 Text(
                     modifier = Modifier.testTag("passive_tracking_status"),
                     text = if (isRecordingSession) {
-                        "Recording · Passive off"
+                        if (isPassiveTrackingEnabled) {
+                            "Recording · Passive paused"
+                        } else {
+                            "Recording · Passive off"
+                        }
+                    } else if (isPassiveTrackingEnabled) {
+                        "Passive on"
                     } else {
                         "Passive off"
                     },
@@ -544,6 +610,26 @@ private fun CoverageMapTopAppBar(
                 DropdownMenuItem(
                     text = { Text("Settings") },
                     onClick = { menuExpanded = false },
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            if (isPassiveTrackingEnabled) {
+                                "Disable Passive Tracking"
+                            } else {
+                                "Enable Passive Tracking"
+                            },
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        if (isPassiveTrackingEnabled) {
+                            onDisablePassiveTracking()
+                        } else {
+                            onEnablePassiveTracking()
+                        }
+                    },
+                    enabled = !isRecordingSession || isPassiveTrackingEnabled,
                 )
                 DropdownMenuItem(
                     text = { Text("Tracking diagnostics") },

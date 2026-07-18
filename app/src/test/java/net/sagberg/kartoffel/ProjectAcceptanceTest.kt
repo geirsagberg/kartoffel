@@ -91,6 +91,7 @@ class ProjectAcceptanceTest {
         assertTrue(coverageMapScreen.contains("ActivityResultContracts.RequestPermission()"))
         assertTrue(coverageMapScreen.contains("Manifest.permission.ACCESS_FINE_LOCATION"))
         assertTrue(manifest.contains("android.permission.ACCESS_FINE_LOCATION"))
+        assertTrue(manifest.contains("android.permission.ACCESS_BACKGROUND_LOCATION"))
         assertTrue(manifest.contains("android.permission.ACCESS_COARSE_LOCATION"))
     }
 
@@ -109,6 +110,30 @@ class ProjectAcceptanceTest {
         assertTrue(manifest.contains(".tracking.RecordingSessionService"))
         assertTrue(service.exists())
         assertTrue(service.readText().contains("return START_STICKY"))
+    }
+
+    @Test
+    fun passiveTrackingUsesStagedPermissionsAndRestorablePendingIntentWork() {
+        val mapScreen = root
+            .resolve("app/src/main/java/net/sagberg/kartoffel/map/CoverageMapScreen.kt")
+            .readText()
+        val actions = root
+            .resolve("app/src/main/java/net/sagberg/kartoffel/tracking/AndroidPassiveTrackingActions.kt")
+            .readText()
+        val manifest = root.resolve("app/src/main/AndroidManifest.xml").readText()
+
+        val foregroundStage = mapScreen.indexOf("passiveForegroundPermissionLauncher.launch")
+        val backgroundStage = mapScreen.indexOf("passiveBackgroundPermissionLauncher.launch")
+        assertTrue(foregroundStage >= 0)
+        assertTrue(backgroundStage >= 0)
+        assertTrue(mapScreen.contains("Manifest.permission.ACTIVITY_RECOGNITION"))
+        assertTrue(mapScreen.contains("Manifest.permission.ACCESS_BACKGROUND_LOCATION"))
+        assertTrue(actions.contains("Priority.PRIORITY_PASSIVE"))
+        assertTrue(actions.contains("PendingIntent.getBroadcast"))
+        assertTrue(!actions.contains("startForeground"))
+        assertTrue(manifest.contains("android.intent.action.BOOT_COMPLETED"))
+        assertTrue(manifest.contains("android.intent.action.MY_PACKAGE_REPLACED"))
+        assertTrue(manifest.contains(".tracking.PassiveTrackingReceiver"))
     }
 
     @Test

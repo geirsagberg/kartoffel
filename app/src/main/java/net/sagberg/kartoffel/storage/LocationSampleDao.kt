@@ -31,6 +31,23 @@ internal interface LocationSampleDao {
         """,
     )
     suspend fun activityModeFixCounts(sessionId: Long): List<ActivityModeFixCount>
+
+    @Query(
+        """
+        SELECT * FROM location_samples
+        WHERE source = :source
+          AND accepted = 1
+          AND trigger IN (:eligibleTriggers)
+          AND captured_at_ms < :capturedAtMillis
+        ORDER BY captured_at_ms DESC, id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun lastAcceptedBefore(
+        source: String,
+        capturedAtMillis: Long,
+        eligibleTriggers: Set<String>,
+    ): LocationSampleEntity?
 }
 
 internal data class ActivityModeFixCount(

@@ -17,6 +17,9 @@ internal enum class RequestedIntervalReason {
     SPEED_OVERRIDE,
     SAFE_FALLBACK,
     SUSPENDED_WHILE_STILL,
+    PASSIVE_INITIAL,
+    PASSIVE_WINDOW,
+    OPPORTUNISTIC,
 }
 
 internal data class LatestFixDiagnostics(
@@ -99,6 +102,38 @@ internal class LiveTrackingDiagnostics {
     }
 
     fun sessionStopped() {
+        mutableState.value = LiveTrackingDiagnosticsState()
+    }
+
+    fun passiveCaptureStarted(
+        activityMode: RecordingActivity,
+        intervalMillis: Long,
+        reason: RequestedIntervalReason,
+    ) {
+        mutableState.value = mutableState.value.copy(
+            trackingActive = true,
+            activityMode = activityMode,
+            locationUpdateState = LocationUpdateState.ACTIVE,
+            requestedLocationIntervalMillis = intervalMillis,
+            intervalReason = reason,
+        )
+    }
+
+    fun passiveWaiting(activityMode: RecordingActivity) {
+        mutableState.value = mutableState.value.copy(
+            trackingActive = true,
+            activityMode = activityMode,
+            locationUpdateState = LocationUpdateState.SUSPENDED,
+            requestedLocationIntervalMillis = null,
+            intervalReason = if (activityMode == RecordingActivity.STILL) {
+                RequestedIntervalReason.SUSPENDED_WHILE_STILL
+            } else {
+                RequestedIntervalReason.OPPORTUNISTIC
+            },
+        )
+    }
+
+    fun passiveStopped() {
         mutableState.value = LiveTrackingDiagnosticsState()
     }
 

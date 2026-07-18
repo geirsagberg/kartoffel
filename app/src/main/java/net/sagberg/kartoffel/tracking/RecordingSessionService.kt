@@ -31,7 +31,17 @@ internal class RecordingSessionService : Service() {
         super.onCreate()
         database = KartoffelDatabase.open(this)
         locationUpdates = FusedRecordingLocationUpdates(this, serviceScope)
-        activityUpdates = FusedRecordingActivityUpdates(this, serviceScope)
+        activityUpdates = FusedRecordingActivityUpdates(
+            context = this,
+            scope = serviceScope,
+            onTransitionObserved = { activity, observedAtElapsedRealtimeMillis ->
+                PassiveTrackingManager.onActivity(
+                    context = this@RecordingSessionService,
+                    activity = activity,
+                    observedAtElapsedRealtimeMillis = observedAtElapsedRealtimeMillis,
+                )
+            },
+        )
         orchestrator = RecordingSessionOrchestrator(
             gateway = RecordingSessionRecorder(database),
             locationUpdates = locationUpdates,
@@ -45,10 +55,12 @@ internal class RecordingSessionService : Service() {
                 when (command) {
                     is RecordingCommand.Start -> {
                         promoteToForeground()
+                        PassiveTrackingManager.pauseForRecordingSession(this@RecordingSessionService)
                         orchestrator.start(command.startedAtMillis)
                     }
                     is RecordingCommand.Stop -> {
                         orchestrator.stop(command.endedAtMillis)
+                        PassiveTrackingManager.resumeAfterRecordingSession(this@RecordingSessionService)
                         stopForeground(STOP_FOREGROUND_REMOVE)
                         stopSelfResult(command.startId)
                     }

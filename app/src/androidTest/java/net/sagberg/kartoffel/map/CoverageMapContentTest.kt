@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -63,9 +64,51 @@ class CoverageMapContentTest {
         compose.onNodeWithContentDescription("More options").performClick()
 
         compose.onNodeWithText("Settings").assertIsDisplayed()
+        compose.onNodeWithText("Enable Passive Tracking").assertIsDisplayed()
         compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
         compose.onNodeWithText("Tracking diagnostics").performClick()
         compose.runOnIdle { assertEquals(true, diagnosticsOpened) }
+    }
+
+    @Test
+    fun passiveTrackingCanBeEnabledAndDisabledFromTheOverflowMenu() {
+        val passiveEnabled = mutableStateOf(false)
+        compose.setContent {
+            MaterialTheme {
+                CoverageMapContent(
+                    hasLocationPermission = true,
+                    isRecordingSession = false,
+                    isPassiveTrackingEnabled = passiveEnabled.value,
+                    onRequestLocationPermission = {},
+                    onStartRecordingSession = {},
+                    onStopRecordingSession = {},
+                    onCenterCurrentLocation = {},
+                    onEnablePassiveTracking = { passiveEnabled.value = true },
+                    onDisablePassiveTracking = { passiveEnabled.value = false },
+                    map = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Enable Passive Tracking").performClick()
+        compose.onNodeWithText("Passive on").assertIsDisplayed()
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Disable Passive Tracking").performClick()
+        compose.onNodeWithText("Passive off").assertIsDisplayed()
+    }
+
+    @Test
+    fun passiveTrackingCannotBeEnabledDuringARecordingSession() {
+        compose.setCoverageMapContent(
+            hasLocationPermission = true,
+            isRecordingSession = true,
+            isPassiveTrackingEnabled = false,
+        )
+
+        compose.onNodeWithContentDescription("More options").performClick()
+
+        compose.onNodeWithText("Enable Passive Tracking").assertIsNotEnabled()
     }
 
     @Test
@@ -209,13 +252,16 @@ class CoverageMapContentTest {
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setCoverageMapContent(
         hasLocationPermission: Boolean,
+        isRecordingSession: Boolean = false,
+        isPassiveTrackingEnabled: Boolean = false,
         onOpenTrackingDiagnostics: () -> Unit = {},
     ) {
         setContent {
             MaterialTheme {
                 CoverageMapContent(
                     hasLocationPermission = hasLocationPermission,
-                    isRecordingSession = false,
+                    isRecordingSession = isRecordingSession,
+                    isPassiveTrackingEnabled = isPassiveTrackingEnabled,
                     onRequestLocationPermission = {},
                     onStartRecordingSession = {},
                     onStopRecordingSession = {},

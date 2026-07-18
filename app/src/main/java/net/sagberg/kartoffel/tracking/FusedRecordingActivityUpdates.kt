@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 internal class FusedRecordingActivityUpdates(
     context: Context,
     private val scope: CoroutineScope,
+    private val onTransitionObserved: suspend (RecordingActivity, Long) -> Unit = { _, _ -> },
 ) : RecordingActivityUpdates {
     private val appContext = context.applicationContext
     private val client = ActivityRecognition.getClient(appContext)
@@ -89,6 +90,10 @@ internal class FusedRecordingActivityUpdates(
             scope.launch {
                 result.transitionEvents.forEach { event ->
                     event.activityType.toRecordingActivity()?.let { activity ->
+                        onTransitionObserved(
+                            activity,
+                            event.elapsedRealTimeNanos / 1_000_000,
+                        )
                         activeListener(RecordingActivityUpdate.Transition(activity))
                     }
                 }
@@ -151,7 +156,7 @@ internal class FusedRecordingActivityUpdates(
     }
 }
 
-private fun Int.toRecordingActivity(): RecordingActivity? = when (this) {
+internal fun Int.toRecordingActivity(): RecordingActivity? = when (this) {
     DetectedActivity.STILL -> RecordingActivity.STILL
     DetectedActivity.WALKING -> RecordingActivity.WALKING
     DetectedActivity.RUNNING -> RecordingActivity.RUNNING
