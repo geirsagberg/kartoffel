@@ -338,6 +338,8 @@ internal fun CoverageMapContent(
     onOpenTrackingDiagnostics: () -> Unit = {},
     map: @Composable BoxScope.() -> Unit,
 ) {
+    var inspectionEnabled by rememberSaveable { mutableStateOf(false) }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -347,6 +349,8 @@ internal fun CoverageMapContent(
                 onEnablePassiveTracking = onEnablePassiveTracking,
                 onDisablePassiveTracking = onDisablePassiveTracking,
                 onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+                inspectionEnabled = inspectionEnabled,
+                onToggleInspection = { inspectionEnabled = !inspectionEnabled },
             )
         },
     ) { contentPadding ->
@@ -358,13 +362,19 @@ internal fun CoverageMapContent(
         ) {
             map()
 
-            if (liveTrackingDiagnostics.trackingActive) {
+            if (liveTrackingDiagnostics.trackingActive && !inspectionEnabled) {
                 LiveTrackingDiagnosticsPanel(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(12.dp),
                     diagnostics = liveTrackingDiagnostics,
                     nowMillis = diagnosticsNowMillis,
+                )
+            }
+
+            if (inspectionEnabled) {
+                TrackingInspectionPrototype(
+                    onExit = { inspectionEnabled = false },
                 )
             }
 
@@ -376,7 +386,7 @@ internal fun CoverageMapContent(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (hasLocationPermission) {
+                if (hasLocationPermission && !inspectionEnabled) {
                     FloatingActionButton(
                         modifier = Modifier.size(48.dp),
                         onClick = onCenterCurrentLocation,
@@ -395,7 +405,7 @@ internal fun CoverageMapContent(
                     }
                 }
 
-                ExtendedFloatingActionButton(
+                if (!inspectionEnabled) ExtendedFloatingActionButton(
                     modifier = Modifier.testTag(
                         if (hasLocationPermission) {
                             "recording_session_control"
@@ -564,16 +574,20 @@ private fun CoverageMapTopAppBar(
     onEnablePassiveTracking: () -> Unit,
     onDisablePassiveTracking: () -> Unit,
     onOpenTrackingDiagnostics: () -> Unit,
+    inspectionEnabled: Boolean,
+    onToggleInspection: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     TopAppBar(
         title = {
             Column {
-                Text("Kartoffel")
+                Text(if (inspectionEnabled) "Tracking Inspection" else "Kartoffel")
                 Text(
                     modifier = Modifier.testTag("passive_tracking_status"),
-                    text = if (isRecordingSession) {
+                    text = if (inspectionEnabled) {
+                        "Prototype · synthetic data"
+                    } else if (isRecordingSession) {
                         if (isPassiveTrackingEnabled) {
                             "Recording · Passive paused"
                         } else {
@@ -630,6 +644,21 @@ private fun CoverageMapTopAppBar(
                         }
                     },
                     enabled = !isRecordingSession || isPassiveTrackingEnabled,
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            if (inspectionEnabled) {
+                                "Exit Tracking Inspection"
+                            } else {
+                                "Tracking Inspection"
+                            },
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onToggleInspection()
+                    },
                 )
                 DropdownMenuItem(
                     text = { Text("Tracking diagnostics") },
