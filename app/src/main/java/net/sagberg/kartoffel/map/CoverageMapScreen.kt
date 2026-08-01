@@ -1,9 +1,12 @@
 package net.sagberg.kartoffel.map
 
 import android.Manifest
+import android.app.Activity
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -87,6 +91,7 @@ import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnosticsState
 import net.sagberg.kartoffel.diagnostics.LocationUpdateState
 import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
 import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.storage.DatabaseBackupManager
 import net.sagberg.kartoffel.storage.PassiveTrackingPreference
 import net.sagberg.kartoffel.storage.PassiveTrackingPreferences
 import net.sagberg.kartoffel.inspection.color
@@ -103,9 +108,126 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
 
 @Composable
-@SuppressLint("MissingPermission")
 internal fun CoverageMapScreen(
     onOpenTrackingDiagnostics: () -> Unit = {},
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val backupManager = remember(context) { DatabaseBackupManager(context) }
+    var pendingRestore by remember { mutableStateOf<Uri?>(null) }
+    var restoreSource by remember { mutableStateOf<Uri?>(null) }
+    val backupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/vnd.sqlite3"),
+    ) { destination ->
+        destination ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            runCatching { backupManager.export(destination) }
+                .onSuccess {
+                    Toast.makeText(context, "Backup saved", Toast.LENGTH_SHORT).show()
+                }
+                .onFailure { failure ->
+                    Toast.makeText(
+                        context,
+                        failure.message ?: "Backup failed",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+        }
+    }
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { source -> pendingRestore = source }
+
+    DatabaseRestoreGate(
+        restoreSource = restoreSource,
+        onRestore = { source ->
+            try {
+                PassiveTrackingManager.prepareForDatabaseRestore(context)
+                backupManager.restore(source)
+                Toast.makeText(context, "Backup restored", Toast.LENGTH_SHORT).show()
+            } catch (failure: Exception) {
+                runCatching { PassiveTrackingManager.restore(context) }
+                Toast.makeText(
+                    context,
+                    failure.message ?: "Restore failed",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } finally {
+                // Reopen every Room consumer, including after a failed file swap.
+                (context as? Activity)?.recreate()
+            }
+        },
+    ) {
+        CoverageMapRoute(
+            onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+            onBackupDatabase = {
+                backupLauncher.launch("kartoffel-backup-${System.currentTimeMillis()}.db")
+            },
+            onRestoreDatabase = {
+                restoreLauncher.launch(
+                    arrayOf(
+                        "application/vnd.sqlite3",
+                        "application/x-sqlite3",
+                        "application/octet-stream",
+                    ),
+                )
+            },
+        )
+
+        pendingRestore?.let { source ->
+            AlertDialog(
+                onDismissRequest = { pendingRestore = null },
+                title = { Text("Restore backup?") },
+                text = {
+                    Text(
+                        "This replaces all current coverage and tracking history. " +
+                            "This cannot be undone.",
+                    )
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingRestore = null
+                            restoreSource = source
+                        },
+                    ) { Text("Restore") }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+internal fun DatabaseRestoreGate(
+    restoreSource: Uri?,
+    onRestore: suspend (Uri) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (restoreSource == null) {
+        content()
+        return
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("Restoring backup…")
+    }
+    LaunchedEffect(restoreSource) {
+        onRestore(restoreSource)
+    }
+}
+
+@Composable
+@SuppressLint("MissingPermission")
+private fun CoverageMapRoute(
+    onOpenTrackingDiagnostics: () -> Unit,
+    onBackupDatabase: () -> Unit,
+    onRestoreDatabase: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -177,7 +299,6 @@ internal fun CoverageMapScreen(
             )
         }
     }
-
     LaunchedEffect(context) {
         PassiveTrackingManager.restore(context)
     }
@@ -339,6 +460,8 @@ internal fun CoverageMapScreen(
             scope.launch { PassiveTrackingManager.disable(context) }
         },
         onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+        onBackupDatabase = onBackupDatabase,
+        onRestoreDatabase = onRestoreDatabase,
         inspectionActive = inspectionActive,
         inspectionFilter = inspectionFilter,
         inspectionSnapshot = inspectionSnapshot,
@@ -393,6 +516,7 @@ internal fun CoverageMapScreen(
             }
         },
     )
+
 }
 
 @Composable
@@ -409,6 +533,8 @@ internal fun CoverageMapContent(
     onEnablePassiveTracking: () -> Unit = {},
     onDisablePassiveTracking: () -> Unit = {},
     onOpenTrackingDiagnostics: () -> Unit = {},
+    onBackupDatabase: () -> Unit = {},
+    onRestoreDatabase: () -> Unit = {},
     inspectionActive: Boolean = false,
     inspectionFilter: TrackingInspectionFilter = TrackingInspectionFilter.Default,
     inspectionSnapshot: TrackingInspectionSnapshot? = null,
@@ -429,6 +555,8 @@ internal fun CoverageMapContent(
                 onEnablePassiveTracking = onEnablePassiveTracking,
                 onDisablePassiveTracking = onDisablePassiveTracking,
                 onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+                onBackupDatabase = onBackupDatabase,
+                onRestoreDatabase = onRestoreDatabase,
                 inspectionActive = inspectionActive,
                 onEnterTrackingInspection = onEnterTrackingInspection,
                 onExitTrackingInspection = onExitTrackingInspection,
@@ -672,6 +800,8 @@ private fun CoverageMapTopAppBar(
     onEnablePassiveTracking: () -> Unit,
     onDisablePassiveTracking: () -> Unit,
     onOpenTrackingDiagnostics: () -> Unit,
+    onBackupDatabase: () -> Unit,
+    onRestoreDatabase: () -> Unit,
     inspectionActive: Boolean,
     onEnterTrackingInspection: () -> Unit,
     onExitTrackingInspection: () -> Unit,
@@ -737,6 +867,21 @@ private fun CoverageMapTopAppBar(
                 DropdownMenuItem(
                     text = { Text("Settings") },
                     onClick = { menuExpanded = false },
+                )
+                DropdownMenuItem(
+                    text = { Text("Back up database") },
+                    onClick = {
+                        menuExpanded = false
+                        onBackupDatabase()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Restore database") },
+                    onClick = {
+                        menuExpanded = false
+                        onRestoreDatabase()
+                    },
+                    enabled = !isRecordingSession,
                 )
                 DropdownMenuItem(
                     text = {

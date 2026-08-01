@@ -1,9 +1,12 @@
 package net.sagberg.kartoffel.map
 
+import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
@@ -39,6 +42,37 @@ class CoverageMapContentTest {
     val compose = createComposeRule()
 
     @Test
+    fun restoreStartsOnlyAfterDatabaseConsumersAreDisposed() {
+        val restoreSource = mutableStateOf<Uri?>(null)
+        var databaseConsumerActive = false
+        var restoreStarted = false
+        compose.setContent {
+            DatabaseRestoreGate(
+                restoreSource = restoreSource.value,
+                onRestore = {
+                    assertEquals(false, databaseConsumerActive)
+                    restoreStarted = true
+                },
+            ) {
+                DisposableEffect(Unit) {
+                    databaseConsumerActive = true
+                    onDispose { databaseConsumerActive = false }
+                }
+                Box(
+                    modifier = Modifier
+                        .testTag("confirm_restore")
+                        .clickable { restoreSource.value = Uri.EMPTY },
+                )
+            }
+        }
+
+        compose.onNodeWithTag("confirm_restore").performClick()
+        compose.waitUntil { restoreStarted }
+
+        compose.runOnIdle { assertEquals(false, databaseConsumerActive) }
+    }
+
+    @Test
     fun permissionRequestIsShownInContextBeforePermissionIsGranted() {
         compose.setCoverageMapContent(hasLocationPermission = false)
 
@@ -65,15 +99,21 @@ class CoverageMapContentTest {
     fun secondaryActionsAreAvailableFromTheOverflowMenu() {
         var diagnosticsOpened = false
         var inspectionOpened = false
+        var backupOpened = false
+        var restoreOpened = false
         compose.setCoverageMapContent(
             hasLocationPermission = true,
             onOpenTrackingDiagnostics = { diagnosticsOpened = true },
             onEnterTrackingInspection = { inspectionOpened = true },
+            onBackupDatabase = { backupOpened = true },
+            onRestoreDatabase = { restoreOpened = true },
         )
 
         compose.onNodeWithContentDescription("More options").performClick()
 
         compose.onNodeWithText("Settings").assertIsDisplayed()
+        compose.onNodeWithText("Back up database").assertIsDisplayed()
+        compose.onNodeWithText("Restore database").assertIsDisplayed()
         compose.onNodeWithText("Tracking inspection").assertIsDisplayed()
         compose.onNodeWithText("Enable Passive Tracking").assertIsDisplayed()
         compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
@@ -82,6 +122,12 @@ class CoverageMapContentTest {
         compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Tracking diagnostics").performClick()
         compose.runOnIdle { assertEquals(true, diagnosticsOpened) }
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Back up database").performClick()
+        compose.runOnIdle { assertEquals(true, backupOpened) }
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Restore database").performClick()
+        compose.runOnIdle { assertEquals(true, restoreOpened) }
     }
 
     @Test
@@ -193,6 +239,7 @@ class CoverageMapContentTest {
         compose.onNodeWithContentDescription("More options").performClick()
 
         compose.onNodeWithText("Enable Passive Tracking").assertIsNotEnabled()
+        compose.onNodeWithText("Restore database").assertIsNotEnabled()
     }
 
     @Test
@@ -339,6 +386,8 @@ class CoverageMapContentTest {
         isRecordingSession: Boolean = false,
         isPassiveTrackingEnabled: Boolean = false,
         onOpenTrackingDiagnostics: () -> Unit = {},
+        onBackupDatabase: () -> Unit = {},
+        onRestoreDatabase: () -> Unit = {},
         inspectionActive: Boolean = false,
         onEnterTrackingInspection: () -> Unit = {},
         onExitTrackingInspection: () -> Unit = {},
@@ -356,6 +405,8 @@ class CoverageMapContentTest {
                     onStopRecordingSession = {},
                     onCenterCurrentLocation = {},
                     onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+                    onBackupDatabase = onBackupDatabase,
+                    onRestoreDatabase = onRestoreDatabase,
                     inspectionActive = inspectionActive,
                     onEnterTrackingInspection = onEnterTrackingInspection,
                     onExitTrackingInspection = onExitTrackingInspection,

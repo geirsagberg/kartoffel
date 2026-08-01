@@ -22,6 +22,17 @@ internal object PassiveTrackingManager {
         orchestrator(context).disable()
     }
 
+    fun prepareForDatabaseRestore(context: Context) {
+        AndroidPassiveTrackingActions(context).apply {
+            unregisterActivityTransitions()
+            unregisterOpportunisticFixes()
+            stopCapture()
+            cancelFallback()
+        }
+        activityState.reset()
+        captureState.stop()
+    }
+
     suspend fun restore(context: Context) {
         val orchestrator = orchestrator(context)
         val preference = DatabasePassiveTrackingGateway(

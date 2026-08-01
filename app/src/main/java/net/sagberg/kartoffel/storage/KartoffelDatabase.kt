@@ -63,6 +63,9 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
     abstract fun trackingSettings(): TrackingSettingsDao
 
     companion object {
+        internal const val NAME = "kartoffel.db"
+        internal const val VERSION = 5
+
         @Volatile
         private var instance: KartoffelDatabase? = null
 
@@ -71,13 +74,19 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
                 .databaseBuilder(
                     context.applicationContext,
                     KartoffelDatabase::class.java,
-                    "kartoffel.db",
+                    NAME,
                 )
                 .setDriver(AndroidSQLiteDriver())
                 .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
                 .build()
                 .also { instance = it }
+        }
+
+        @Synchronized
+        fun closeForRestore() {
+            instance?.close()
+            instance = null
         }
     }
 }
