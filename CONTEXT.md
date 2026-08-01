@@ -20,6 +20,8 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 - **Good Enough History:** useful passive history without requiring perfect capture.
 - **Barely Noticeable Battery Use:** passive capture that does not create obvious battery anxiety in normal use.
 - **Coverage Evidence:** retained information explaining why a cell is considered visited.
+- **Observed Coverage Evidence:** Coverage Evidence created when an accepted Location Sample directly falls within a Coverage Cell.
+- **Inferred Coverage Evidence:** Coverage Evidence created when Conservative Interpolation clears a Coverage Cell between accepted Location Samples without directly observing it.
 - **Accuracy-Gated Clearing:** rejecting evidence that is too inaccurate to clear fog safely.
 - **Conservative Interpolation:** filling short, plausible gaps between samples. When several equally short local routes are credible, all may be filled.
 - **Passive Gap:** a visited place left covered because passive evidence was insufficient.
@@ -31,6 +33,7 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 - **Activity Mode:** the most recently recognized movement state that can be credibly aligned with when a location fix was captured. `Unknown` covers unavailable, absent, stale, or time-unalignable recognition, including fixes retained from before Activity Mode was recorded.
 - **Requested Location Interval:** the location-update cadence Kartoffel asks Android to provide. It describes tracking policy, not the cadence Android actually delivers.
 - **Tracking Diagnostics:** a secondary tuning view for inspecting what tracking is doing and why coverage was or was not cleared. During the MVP it is an owner/developer instrument, not a polished end-user explanation.
+- **Diagnostic Sample Cell:** the H3 cell containing a retained Location Sample's reported coordinate, whether accepted or rejected. It does not itself represent Street-Level Coverage or the sample's accuracy radius; Tracking Inspection may also render Inferred Coverage Evidence in Coverage Cells containing no retained sample.
 - **Evidence Compression:** reducing retained samples while preserving coverage and useful session history.
 - **Evidence Retention:** how long evidence is kept before deletion or compression.
 

@@ -1,13 +1,34 @@
 # Domain Docs
 
-This is a single-context repo.
+How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
-Before working on the codebase, read:
+## Before exploring, read these
 
-- `CONTEXT.md` for project language.
-- Relevant ADRs in `docs/adr/`.
-- `docs/mvp-spec.md` when planning MVP implementation work.
+- **`CONTEXT.md`** at the repo root, or
+- **`CONTEXT-MAP.md`** at the repo root if it exists — it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
+- **`docs/adr/`** — read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+- **`docs/mvp-spec.md`** when planning MVP implementation work.
 
-Use the glossary's vocabulary in issue titles, implementation plans, tests, and review comments. Do not drift to synonyms that `CONTEXT.md` explicitly avoids.
+If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill creates them lazily when terms or decisions actually get resolved.
 
-If a proposed change contradicts an ADR, surface that conflict explicitly before implementing it.
+## File structure
+
+Single-context repo:
+
+```text
+/
+├── CONTEXT.md
+├── docs/
+│   └── adr/
+└── app/
+```
+
+## Use the glossary's vocabulary
+
+When output names a domain concept in an issue title, proposal, hypothesis, test, or plan, use the term defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
+
+If a needed concept isn't in the glossary, reconsider whether the new language is necessary or note a genuine gap for `/domain-modeling`.
+
+## Flag ADR conflicts
+
+If output contradicts an existing ADR, surface the conflict explicitly rather than silently overriding it.
