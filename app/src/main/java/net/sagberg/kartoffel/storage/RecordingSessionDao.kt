@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 internal interface RecordingSessionDao {
+    @Query("SELECT * FROM recording_sessions ORDER BY started_at_ms DESC, id DESC")
+    suspend fun all(): List<RecordingSessionEntity>
+
     @Query(
         """
         SELECT * FROM recording_sessions

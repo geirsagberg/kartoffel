@@ -34,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -69,6 +71,7 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.TileOverlay
+import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberTileOverlayState
 import kotlinx.coroutines.delay
@@ -76,6 +79,7 @@ import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import net.sagberg.kartoffel.R
 import net.sagberg.kartoffel.coverage.CoverageSnapshot
+import net.sagberg.kartoffel.coverage.GeoBounds
 import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
 import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
 import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnostics
@@ -85,6 +89,13 @@ import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
 import net.sagberg.kartoffel.storage.KartoffelDatabase
 import net.sagberg.kartoffel.storage.PassiveTrackingPreference
 import net.sagberg.kartoffel.storage.PassiveTrackingPreferences
+import net.sagberg.kartoffel.inspection.color
+import net.sagberg.kartoffel.inspection.SampleSort
+import net.sagberg.kartoffel.inspection.TrackingInspectionControls
+import net.sagberg.kartoffel.inspection.TrackingInspectionDetails
+import net.sagberg.kartoffel.inspection.TrackingInspectionFilter
+import net.sagberg.kartoffel.inspection.TrackingInspectionLoader
+import net.sagberg.kartoffel.inspection.TrackingInspectionSnapshot
 import net.sagberg.kartoffel.tracking.PassiveTrackingManager
 import net.sagberg.kartoffel.tracking.RecordingActivity
 import net.sagberg.kartoffel.tracking.RecordingSessionService
@@ -103,6 +114,12 @@ internal fun CoverageMapScreen(
         LocationServices.getFusedLocationProviderClient(context)
     }
     val database = remember(context) { KartoffelDatabase.open(context) }
+    val inspectionLoader = remember(database) { TrackingInspectionLoader(database) }
+    var inspectionActive by remember { mutableStateOf(false) }
+    var inspectionFilter by remember { mutableStateOf(TrackingInspectionFilter.Default) }
+    var inspectionSnapshot by remember { mutableStateOf<TrackingInspectionSnapshot?>(null) }
+    var selectedInspectionCellId by remember { mutableStateOf<Long?>(null) }
+    var inspectionSort by remember { mutableStateOf(SampleSort.NewestFirst) }
     val persistedCoverage = remember(database) {
         PersistedCoverageLoader(database.coverageCells())
     }
@@ -178,6 +195,22 @@ internal fun CoverageMapScreen(
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(fallbackCameraTarget, 12f)
     }
+    val cameraIsMoving = cameraPositionState.isMoving
+    val visibleInspectionCells = inspectionSnapshot?.let { snapshot ->
+        val bounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
+        if (bounds == null || bounds.southwest.longitude > bounds.northeast.longitude) {
+            snapshot.cells
+        } else {
+            snapshot.cellsIntersecting(
+                GeoBounds(
+                    south = bounds.southwest.latitude,
+                    west = bounds.southwest.longitude,
+                    north = bounds.northeast.latitude,
+                    east = bounds.northeast.longitude,
+                ),
+            )
+        }
+    }.orEmpty()
     val fogTileOverlayState = rememberTileOverlayState()
     val fogTileProvider = remember { FogOfWarTileProvider(CoverageSnapshot.Empty) }
 
@@ -192,6 +225,15 @@ internal fun CoverageMapScreen(
                 }
                 hasLoadedInitialCoverage = true
             }
+    }
+
+    LaunchedEffect(inspectionActive, inspectionFilter) {
+        if (!inspectionActive) {
+            inspectionSnapshot = null
+            return@LaunchedEffect
+        }
+        inspectionSnapshot = inspectionLoader.load(inspectionFilter)
+        selectedInspectionCellId = null
     }
 
     fun moveToCurrentLocation(zoom: Float) {
@@ -297,6 +339,20 @@ internal fun CoverageMapScreen(
             scope.launch { PassiveTrackingManager.disable(context) }
         },
         onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+        inspectionActive = inspectionActive,
+        inspectionFilter = inspectionFilter,
+        inspectionSnapshot = inspectionSnapshot,
+        selectedInspectionCellId = selectedInspectionCellId,
+        inspectionSort = inspectionSort,
+        onEnterTrackingInspection = { inspectionActive = true },
+        onExitTrackingInspection = {
+            inspectionActive = false
+            inspectionFilter = TrackingInspectionFilter.Default
+            selectedInspectionCellId = null
+            inspectionSort = SampleSort.NewestFirst
+        },
+        onInspectionFilterChange = { inspectionFilter = it },
+        onInspectionSortChange = { inspectionSort = it },
         map = {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
@@ -317,6 +373,23 @@ internal fun CoverageMapScreen(
                     visible = true,
                     zIndex = 10f,
                 )
+                if (inspectionActive) {
+                    visibleInspectionCells.forEach { cell ->
+                        Polygon(
+                            points = cell.boundary.map { LatLng(it.latitude, it.longitude) },
+                            fillColor = cell.state.color.copy(alpha = 0.72f),
+                            strokeColor = if (cell.cellId == selectedInspectionCellId) {
+                                Color.White
+                            } else {
+                                Color.Black.copy(alpha = 0.6f)
+                            },
+                            strokeWidth = if (cell.cellId == selectedInspectionCellId) 9f else 3f,
+                            zIndex = if (cell.cellId == selectedInspectionCellId) 21f else 20f,
+                            onClick = { selectedInspectionCellId = cell.cellId },
+                            clickable = true,
+                        )
+                    }
+                }
             }
         },
     )
@@ -336,6 +409,15 @@ internal fun CoverageMapContent(
     onEnablePassiveTracking: () -> Unit = {},
     onDisablePassiveTracking: () -> Unit = {},
     onOpenTrackingDiagnostics: () -> Unit = {},
+    inspectionActive: Boolean = false,
+    inspectionFilter: TrackingInspectionFilter = TrackingInspectionFilter.Default,
+    inspectionSnapshot: TrackingInspectionSnapshot? = null,
+    selectedInspectionCellId: Long? = null,
+    inspectionSort: SampleSort = SampleSort.NewestFirst,
+    onEnterTrackingInspection: () -> Unit = {},
+    onExitTrackingInspection: () -> Unit = {},
+    onInspectionFilterChange: (TrackingInspectionFilter) -> Unit = {},
+    onInspectionSortChange: (SampleSort) -> Unit = {},
     map: @Composable BoxScope.() -> Unit,
 ) {
     Scaffold(
@@ -347,6 +429,9 @@ internal fun CoverageMapContent(
                 onEnablePassiveTracking = onEnablePassiveTracking,
                 onDisablePassiveTracking = onDisablePassiveTracking,
                 onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+                inspectionActive = inspectionActive,
+                onEnterTrackingInspection = onEnterTrackingInspection,
+                onExitTrackingInspection = onExitTrackingInspection,
             )
         },
     ) { contentPadding ->
@@ -358,7 +443,7 @@ internal fun CoverageMapContent(
         ) {
             map()
 
-            if (liveTrackingDiagnostics.trackingActive) {
+            if (!inspectionActive && liveTrackingDiagnostics.trackingActive) {
                 LiveTrackingDiagnosticsPanel(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -368,7 +453,30 @@ internal fun CoverageMapContent(
                 )
             }
 
-            Column(
+            if (inspectionActive) {
+                TrackingInspectionControls(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(12.dp),
+                    filter = inspectionFilter,
+                    sessions = inspectionSnapshot?.availableRecordingSessions.orEmpty(),
+                    nowMillis = System.currentTimeMillis(),
+                    loading = inspectionSnapshot == null,
+                    empty = inspectionSnapshot?.cells?.isEmpty() == true,
+                    onFilterChange = onInspectionFilterChange,
+                )
+                inspectionSnapshot?.cells?.firstOrNull { it.cellId == selectedInspectionCellId }
+                    ?.let { cell ->
+                        TrackingInspectionDetails(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                                .padding(12.dp)
+                                .fillMaxWidth(),
+                            cell = cell,
+                            sort = inspectionSort,
+                            onSortChange = onInspectionSortChange,
+                        )
+                    }
+            } else Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
@@ -564,14 +672,19 @@ private fun CoverageMapTopAppBar(
     onEnablePassiveTracking: () -> Unit,
     onDisablePassiveTracking: () -> Unit,
     onOpenTrackingDiagnostics: () -> Unit,
+    inspectionActive: Boolean,
+    onEnterTrackingInspection: () -> Unit,
+    onExitTrackingInspection: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     TopAppBar(
         title = {
             Column {
-                Text("Kartoffel")
-                Text(
+                Text(if (inspectionActive) "Tracking Inspection" else "Kartoffel")
+                if (inspectionActive) {
+                    Text("Read-only retained evidence", style = MaterialTheme.typography.labelSmall)
+                } else Text(
                     modifier = Modifier.testTag("passive_tracking_status"),
                     text = if (isRecordingSession) {
                         if (isPassiveTrackingEnabled) {
@@ -594,6 +707,13 @@ private fun CoverageMapTopAppBar(
             }
         },
         actions = {
+            if (inspectionActive) {
+                TextButton(
+                    modifier = Modifier.testTag("exit_tracking_inspection"),
+                    onClick = onExitTrackingInspection,
+                ) { Text("Exit") }
+                return@TopAppBar
+            }
             IconButton(
                 modifier = Modifier.testTag("settings_diagnostics_menu"),
                 onClick = { menuExpanded = true },
@@ -607,6 +727,13 @@ private fun CoverageMapTopAppBar(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
             ) {
+                DropdownMenuItem(
+                    text = { Text("Tracking inspection") },
+                    onClick = {
+                        menuExpanded = false
+                        onEnterTrackingInspection()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text("Settings") },
                     onClick = { menuExpanded = false },

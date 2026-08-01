@@ -29,7 +29,7 @@ class KartoffelDatabaseMigrationTest {
 
         val database = Room.databaseBuilder(context, KartoffelDatabase::class.java, databaseName)
             .setDriver(AndroidSQLiteDriver())
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .allowMainThreadQueries()
             .build()
         try {
@@ -38,6 +38,7 @@ class KartoffelDatabaseMigrationTest {
             assertEquals(7L, sample?.recordingSessionId)
             assertNotNull(database.recordingSessions().find(7))
             assertEquals(11L, database.recordingSessionPoints().forSession(7).single().sampleId)
+            assertEquals(1, database.coverageCells().find(123)?.evidenceMask)
             assertEquals(false, PassiveTrackingPreferences(database.trackingSettings()).current().enabled)
         } finally {
             database.close()
@@ -89,6 +90,11 @@ class KartoffelDatabaseMigrationTest {
             db.execSQL(
                 "INSERT INTO recording_sessions " +
                     "(id, started_at_ms, ended_at_ms) VALUES (7, 1000, 3000)",
+            )
+            db.execSQL(
+                "INSERT INTO coverage_cells " +
+                    "(cell_id, first_seen_at_ms, last_seen_at_ms, evidence_mask) " +
+                    "VALUES (123, 1000, 3000, 1)",
             )
             db.execSQL(
                 "INSERT INTO location_samples " +

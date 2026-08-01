@@ -28,6 +28,18 @@ internal val MIGRATION_3_4 = Migration(3, 4) { connection ->
     )
 }
 
+internal val MIGRATION_4_5 = Migration(4, 5) { connection ->
+    connection.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_location_samples_source_captured_at_ms " +
+            "ON location_samples(source, captured_at_ms)",
+    )
+    connection.execSQL(
+        "CREATE INDEX IF NOT EXISTS " +
+            "index_location_samples_recording_session_id_captured_at_ms " +
+            "ON location_samples(recording_session_id, captured_at_ms)",
+    )
+}
+
 @Database(
     entities = [
         CoverageCellEntity::class,
@@ -36,7 +48,7 @@ internal val MIGRATION_3_4 = Migration(3, 4) { connection ->
         RecordingSessionPointEntity::class,
         TrackingSettingsEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 internal abstract class KartoffelDatabase : RoomDatabase() {
@@ -62,7 +74,7 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
                     "kartoffel.db",
                 )
                 .setDriver(AndroidSQLiteDriver())
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
                 .build()
                 .also { instance = it }

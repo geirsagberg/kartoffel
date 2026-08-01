@@ -24,11 +24,15 @@ internal data class CoverageCellEntity(
 
 internal enum class CoverageEvidenceSource(
     val persistedName: String,
-    val bit: Int,
+    val observedBit: Int,
+    val inferredBit: Int,
 ) {
-    PASSIVE_TRACKING("passive_tracking", 1),
-    RECORDING_SESSION("recording_session", 2),
+    PASSIVE_TRACKING("passive_tracking", observedBit = 1, inferredBit = 4),
+    RECORDING_SESSION("recording_session", observedBit = 2, inferredBit = 8),
 }
 
 internal fun evidenceMaskOf(vararg sources: CoverageEvidenceSource): Int =
-    sources.fold(0) { mask, source -> mask or source.bit }
+    sources.fold(0) { mask, source -> mask or source.observedBit }
+
+internal fun inferredEvidenceMaskOf(vararg sources: CoverageEvidenceSource): Int =
+    sources.fold(0) { mask, source -> mask or source.inferredBit }

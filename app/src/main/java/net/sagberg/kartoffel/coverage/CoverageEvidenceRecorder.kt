@@ -7,6 +7,7 @@ import net.sagberg.kartoffel.storage.LocationSampleEntity
 import net.sagberg.kartoffel.storage.PersistedActivityMode
 import net.sagberg.kartoffel.storage.RecordingSessionPointEntity
 import net.sagberg.kartoffel.storage.evidenceMaskOf
+import net.sagberg.kartoffel.storage.inferredEvidenceMaskOf
 
 internal data class CoverageLocationFix(
     val coordinate: GeoCoordinate,
@@ -108,7 +109,7 @@ internal class CoverageEvidenceRecorder(
                                 cellId = inferredCell.value,
                                 firstSeenAtMillis = fix.capturedAtMillis,
                                 lastSeenAtMillis = fix.capturedAtMillis,
-                                evidenceMask = evidenceMaskOf(rules.source),
+                                evidenceMask = inferredEvidenceMaskOf(rules.source),
                             )
                         }
                     }
@@ -138,7 +139,7 @@ internal class CoverageEvidenceRecorder(
                             cellId = inferredCell.value,
                             firstSeenAtMillis = fix.capturedAtMillis,
                             lastSeenAtMillis = fix.capturedAtMillis,
-                            evidenceMask = evidenceMaskOf(rules.source),
+                            evidenceMask = inferredEvidenceMaskOf(rules.source),
                         )
                     }
                 }

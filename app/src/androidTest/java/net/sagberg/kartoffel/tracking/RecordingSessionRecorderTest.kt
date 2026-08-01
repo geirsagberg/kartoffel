@@ -13,6 +13,7 @@ import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
 import net.sagberg.kartoffel.storage.CoverageEvidenceSource
 import net.sagberg.kartoffel.storage.KartoffelDatabase
 import net.sagberg.kartoffel.storage.evidenceMaskOf
+import net.sagberg.kartoffel.storage.inferredEvidenceMaskOf
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -158,9 +159,22 @@ class RecordingSessionRecorderTest {
             ),
             cells.map { it.cellId }.toSet(),
         )
-        assertTrue(cells.all {
-            it.evidenceMask == evidenceMaskOf(CoverageEvidenceSource.RECORDING_SESSION)
-        })
+        assertTrue(
+            cells.filter { it.cellId in setOf(626169207098265599, 626169207099809791) }
+                .all {
+                    it.evidenceMask == evidenceMaskOf(
+                        CoverageEvidenceSource.RECORDING_SESSION,
+                    )
+                },
+        )
+        assertTrue(
+            cells.filter { it.cellId in setOf(626169207099793407, 626169207098388479) }
+                .all {
+                    it.evidenceMask == inferredEvidenceMaskOf(
+                        CoverageEvidenceSource.RECORDING_SESSION,
+                    )
+                },
+        )
         assertTrue(
             cells.filter { it.cellId in setOf(626169207099793407, 626169207098388479) }
                 .all { it.firstSeenAtMillis == 3_000L && it.lastSeenAtMillis == 3_000L },

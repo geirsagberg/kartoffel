@@ -23,6 +23,40 @@ internal interface LocationSampleDao {
     suspend fun between(fromMillis: Long, toMillis: Long): List<LocationSampleEntity>
 
     @Query(
+        "SELECT * FROM location_samples WHERE captured_at_ms >= :startMillis " +
+            "AND captured_at_ms < :endMillis ORDER BY captured_at_ms, id",
+    )
+    suspend fun inspectionAll(startMillis: Long, endMillis: Long): List<LocationSampleEntity>
+
+    @Query(
+        "SELECT * FROM location_samples WHERE source = 'passive_tracking' " +
+            "AND captured_at_ms >= :startMillis AND captured_at_ms < :endMillis " +
+            "ORDER BY captured_at_ms, id",
+    )
+    suspend fun inspectionPassive(startMillis: Long, endMillis: Long): List<LocationSampleEntity>
+
+    @Query(
+        "SELECT * FROM location_samples WHERE recording_session_id IS NOT NULL " +
+            "AND captured_at_ms >= :startMillis AND captured_at_ms < :endMillis " +
+            "ORDER BY captured_at_ms, id",
+    )
+    suspend fun inspectionRecordingSessions(
+        startMillis: Long,
+        endMillis: Long,
+    ): List<LocationSampleEntity>
+
+    @Query(
+        "SELECT * FROM location_samples WHERE recording_session_id = :sessionId " +
+            "AND captured_at_ms >= :startMillis AND captured_at_ms < :endMillis " +
+            "ORDER BY captured_at_ms, id",
+    )
+    suspend fun inspectionRecordingSession(
+        sessionId: Long,
+        startMillis: Long,
+        endMillis: Long,
+    ): List<LocationSampleEntity>
+
+    @Query(
         """
         SELECT activity_mode, COUNT(*) AS fix_count
         FROM location_samples

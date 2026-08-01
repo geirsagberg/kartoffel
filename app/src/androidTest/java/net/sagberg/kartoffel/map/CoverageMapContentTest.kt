@@ -21,6 +21,14 @@ import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
 import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnosticsState
 import net.sagberg.kartoffel.diagnostics.LocationUpdateState
 import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
+import net.sagberg.kartoffel.coverage.GeoCoordinate
+import net.sagberg.kartoffel.inspection.DiagnosticCellState
+import net.sagberg.kartoffel.inspection.DiagnosticProvenance
+import net.sagberg.kartoffel.inspection.DiagnosticSample
+import net.sagberg.kartoffel.inspection.DiagnosticSampleCell
+import net.sagberg.kartoffel.inspection.TrackingInspectionFilter
+import net.sagberg.kartoffel.inspection.TrackingInspectionMeasurements
+import net.sagberg.kartoffel.inspection.TrackingInspectionSnapshot
 import net.sagberg.kartoffel.tracking.RecordingActivity
 import org.junit.Rule
 import org.junit.Assert.assertEquals
@@ -56,18 +64,94 @@ class CoverageMapContentTest {
     @Test
     fun secondaryActionsAreAvailableFromTheOverflowMenu() {
         var diagnosticsOpened = false
+        var inspectionOpened = false
         compose.setCoverageMapContent(
             hasLocationPermission = true,
             onOpenTrackingDiagnostics = { diagnosticsOpened = true },
+            onEnterTrackingInspection = { inspectionOpened = true },
         )
 
         compose.onNodeWithContentDescription("More options").performClick()
 
         compose.onNodeWithText("Settings").assertIsDisplayed()
+        compose.onNodeWithText("Tracking inspection").assertIsDisplayed()
         compose.onNodeWithText("Enable Passive Tracking").assertIsDisplayed()
         compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
+        compose.onNodeWithText("Tracking inspection").performClick()
+        compose.runOnIdle { assertEquals(true, inspectionOpened) }
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Tracking diagnostics").performClick()
         compose.runOnIdle { assertEquals(true, diagnosticsOpened) }
+    }
+
+    @Test
+    fun trackingInspectionIsUnmistakableReadOnlyAndHidesNormalActions() {
+        var exited = false
+        compose.setCoverageMapContent(
+            hasLocationPermission = true,
+            inspectionActive = true,
+            onExitTrackingInspection = { exited = true },
+        )
+
+        compose.onNodeWithText("Tracking Inspection").assertIsDisplayed()
+        compose.onNodeWithText("Read-only retained evidence").assertIsDisplayed()
+        compose.onNodeWithTag("inspection_filter_controls").assertIsDisplayed()
+        compose.onNodeWithText("All tracking").assertIsDisplayed()
+        compose.onNodeWithText("All time").assertIsDisplayed()
+        compose.onAllNodesWithTag("recording_session_control").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Center on current location").assertCountEquals(0)
+        compose.onAllNodesWithTag("live_diagnostics_panel").assertCountEquals(0)
+        compose.onAllNodesWithTag("settings_diagnostics_menu").assertCountEquals(0)
+        compose.onNodeWithTag("exit_tracking_inspection").performClick()
+        compose.runOnIdle { assertEquals(true, exited) }
+    }
+
+    @Test
+    fun selectedInspectionCellShowsSummaryAndExpandableLosslessHistory() {
+        val cell = DiagnosticSampleCell(
+            cellId = 123,
+            boundary = listOf(
+                GeoCoordinate(59.91, 10.75),
+                GeoCoordinate(59.92, 10.75),
+                GeoCoordinate(59.91, 10.76),
+            ),
+            state = DiagnosticCellState.Observed,
+            provenance = setOf(
+                DiagnosticProvenance.PassiveObserved,
+                DiagnosticProvenance.PassiveRejected,
+            ),
+            acceptedCount = 1,
+            rejectedCount = 1,
+            evidenceFirstMillis = 1_000,
+            evidenceLastMillis = 2_000,
+            sampleFirstMillis = 1_000,
+            sampleLastMillis = 2_000,
+            samples = listOf(
+                DiagnosticSample(2, 2_000, 12.0, "passive_tracking", "window", null, "walking", false, "accuracy"),
+                DiagnosticSample(1, 1_000, 8.0, "passive_tracking", "window", null, "walking", true, null),
+            ),
+        )
+        val snapshot = TrackingInspectionSnapshot(
+            filter = TrackingInspectionFilter.Default,
+            availableScopes = emptyList(),
+            availableRecordingSessions = emptyList(),
+            cells = listOf(cell),
+            measurements = TrackingInspectionMeasurements(1, 2, 3),
+        )
+        compose.setCoverageMapContent(
+            hasLocationPermission = true,
+            inspectionActive = true,
+            inspectionSnapshot = snapshot,
+            selectedInspectionCellId = cell.cellId,
+        )
+
+        compose.onAllNodesWithText("Observed").assertCountEquals(2)
+        compose.onNodeWithText("2 total · 1 accepted · 1 rejected · Passive").assertIsDisplayed()
+        compose.onAllNodesWithText("Accepted", substring = true).assertCountEquals(0)
+        compose.onNodeWithText("Samples (2)").performClick()
+        compose.onNodeWithText("Accepted · 8 m", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Rejected · 12 m", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Newest first").assertIsDisplayed()
     }
 
     @Test
@@ -255,6 +339,11 @@ class CoverageMapContentTest {
         isRecordingSession: Boolean = false,
         isPassiveTrackingEnabled: Boolean = false,
         onOpenTrackingDiagnostics: () -> Unit = {},
+        inspectionActive: Boolean = false,
+        onEnterTrackingInspection: () -> Unit = {},
+        onExitTrackingInspection: () -> Unit = {},
+        inspectionSnapshot: TrackingInspectionSnapshot? = null,
+        selectedInspectionCellId: Long? = null,
     ) {
         setContent {
             MaterialTheme {
@@ -267,6 +356,11 @@ class CoverageMapContentTest {
                     onStopRecordingSession = {},
                     onCenterCurrentLocation = {},
                     onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+                    inspectionActive = inspectionActive,
+                    onEnterTrackingInspection = onEnterTrackingInspection,
+                    onExitTrackingInspection = onExitTrackingInspection,
+                    inspectionSnapshot = inspectionSnapshot,
+                    selectedInspectionCellId = selectedInspectionCellId,
                     map = {
                         Box(
                             modifier = Modifier

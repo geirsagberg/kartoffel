@@ -7,7 +7,11 @@ import androidx.room3.PrimaryKey
 
 @Entity(
     tableName = "location_samples",
-    indices = [Index(value = ["captured_at_ms"])],
+    indices = [
+        Index(value = ["captured_at_ms"]),
+        Index(value = ["source", "captured_at_ms"]),
+        Index(value = ["recording_session_id", "captured_at_ms"]),
+    ],
 )
 internal data class LocationSampleEntity(
     @PrimaryKey(autoGenerate = true)
