@@ -40,6 +40,27 @@ internal val MIGRATION_4_5 = Migration(4, 5) { connection ->
     )
 }
 
+internal val MIGRATION_5_6 = Migration(5, 6) { connection ->
+    connection.execSQL(
+        "CREATE TABLE IF NOT EXISTS manual_route_claims (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, created_at_ms INTEGER NOT NULL)",
+    )
+    connection.execSQL(
+        "CREATE TABLE IF NOT EXISTS manual_route_claim_cells (" +
+            "claim_id INTEGER NOT NULL, cell_id INTEGER NOT NULL, " +
+            "PRIMARY KEY(claim_id, cell_id), FOREIGN KEY(claim_id) " +
+            "REFERENCES manual_route_claims(id) ON UPDATE NO ACTION ON DELETE CASCADE)",
+    )
+    connection.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_manual_route_claim_cells_claim_id " +
+            "ON manual_route_claim_cells(claim_id)",
+    )
+    connection.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_manual_route_claim_cells_cell_id " +
+            "ON manual_route_claim_cells(cell_id)",
+    )
+}
+
 @Database(
     entities = [
         CoverageCellEntity::class,
@@ -47,8 +68,10 @@ internal val MIGRATION_4_5 = Migration(4, 5) { connection ->
         RecordingSessionEntity::class,
         RecordingSessionPointEntity::class,
         TrackingSettingsEntity::class,
+        ManualRouteClaimEntity::class,
+        ManualRouteClaimCellEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 internal abstract class KartoffelDatabase : RoomDatabase() {
@@ -62,9 +85,11 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
 
     abstract fun trackingSettings(): TrackingSettingsDao
 
+    abstract fun manualRouteClaims(): ManualRouteClaimDao
+
     companion object {
         internal const val NAME = "kartoffel.db"
-        internal const val VERSION = 5
+        internal const val VERSION = 6
 
         @Volatile
         private var instance: KartoffelDatabase? = null
@@ -77,7 +102,7 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
                     NAME,
                 )
                 .setDriver(AndroidSQLiteDriver())
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
                 .build()
                 .also { instance = it }

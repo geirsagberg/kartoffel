@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,11 +52,16 @@ internal fun TrackingInspectionControls(
     loading: Boolean,
     empty: Boolean,
     onFilterChange: (TrackingInspectionFilter) -> Unit,
+    manualRouteClaims: List<InspectionManualRouteClaim> = emptyList(),
+    selectedManualRouteClaimId: Long? = null,
+    onSelectManualRouteClaim: (Long) -> Unit = {},
+    onWithdrawManualRouteClaim: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var scopeMenu by remember { mutableStateOf(false) }
     var timeMenu by remember { mutableStateOf(false) }
     var filtersExpanded by rememberSaveable { mutableStateOf(false) }
+    var pendingWithdrawal by remember { mutableStateOf<InspectionManualRouteClaim?>(null) }
     val customTime = filter.time as? TrackingInspectionTime.Custom
     var customStart by remember(filter.time) {
         mutableStateOf(customTime?.startMillis?.localDateTime().orEmpty())
@@ -73,6 +79,23 @@ internal fun TrackingInspectionControls(
         TrackingInspectionTime.Last24Hours(nowMillis),
         TrackingInspectionTime.Last7Days(nowMillis),
     )
+
+    pendingWithdrawal?.let { claim ->
+        AlertDialog(
+            onDismissRequest = { pendingWithdrawal = null },
+            title = { Text("Withdraw Manual Route Claim?") },
+            text = { Text("Cells supported only by this claim will be fogged again.") },
+            dismissButton = {
+                TextButton(onClick = { pendingWithdrawal = null }) { Text("Cancel") }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingWithdrawal = null
+                    onWithdrawManualRouteClaim(claim.id)
+                }) { Text("Withdraw") }
+            },
+        )
+    }
 
     Card(modifier = modifier.fillMaxWidth().testTag("inspection_filter_controls")) {
         Column(
@@ -210,6 +233,21 @@ internal fun TrackingInspectionControls(
             }
 
             InspectionLegend()
+            manualRouteClaims.forEach { claim ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().testTag("manual_route_claim_${claim.id}"),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Manual Route Claim · ${claim.createdAtMillis.compactTime()}")
+                    Row {
+                        TextButton(onClick = { onSelectManualRouteClaim(claim.id) }) {
+                            Text(if (selectedManualRouteClaimId == claim.id) "Previewing" else "Preview")
+                        }
+                        TextButton(onClick = { pendingWithdrawal = claim }) { Text("Withdraw") }
+                    }
+                }
+            }
             when {
                 loading -> Text(
                     "Loading retained evidence…",

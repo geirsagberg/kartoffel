@@ -2,6 +2,7 @@ package net.sagberg.kartoffel.inspection
 
 import net.sagberg.kartoffel.coverage.GeoBounds
 import net.sagberg.kartoffel.coverage.GeoCoordinate
+import net.sagberg.kartoffel.coverage.CoverageCellShape
 
 internal sealed interface TrackingInspectionScope {
     data object AllTracking : TrackingInspectionScope
@@ -83,6 +84,12 @@ internal data class InspectionRecordingSession(
     val endedAtMillis: Long?,
 )
 
+internal data class InspectionManualRouteClaim(
+    val id: Long,
+    val createdAtMillis: Long,
+    val cells: List<CoverageCellShape>,
+)
+
 internal data class TrackingInspectionMeasurements(
     val databaseMillis: Long,
     val aggregationMillis: Long,
@@ -95,6 +102,7 @@ internal data class TrackingInspectionSnapshot(
     val availableRecordingSessions: List<InspectionRecordingSession>,
     val cells: List<DiagnosticSampleCell>,
     val measurements: TrackingInspectionMeasurements,
+    val manualRouteClaims: List<InspectionManualRouteClaim> = emptyList(),
 ) {
     fun cellsIntersecting(viewport: GeoBounds): List<DiagnosticSampleCell> = cells.filter { cell ->
         GeoBounds.containing(cell.boundary).intersects(viewport)

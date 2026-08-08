@@ -175,6 +175,25 @@ class TrackingInspectionLoaderTest {
         assertTrue(!messages.single().contains("latitude") && !messages.single().contains("longitude"))
     }
 
+    @Test
+    fun loaderListsManualClaimsByCreationTimeWithCellDerivedPreview() = runBlocking {
+        val h3 = H3CoverageCells()
+        val cells = setOf(
+            h3.cellAt(GeoCoordinate(59.9109, 10.7522)).value,
+            h3.cellAt(GeoCoordinate(59.9119, 10.7552)).value,
+        )
+        val claimId = database.manualRouteClaims().create(4_000, cells)
+
+        val snapshot = TrackingInspectionLoader(database).load(TrackingInspectionFilter.Default)
+
+        val claim = snapshot.manualRouteClaims.single()
+        assertEquals(claimId, claim.id)
+        assertEquals(4_000L, claim.createdAtMillis)
+        assertEquals(cells, claim.cells.map { it.id.toLong() }.toSet())
+        assertTrue(claim.cells.all { it.boundary.size >= 3 })
+        assertTrue(snapshot.availableRecordingSessions.isEmpty())
+    }
+
     private suspend fun insertSample(
         capturedAtMillis: Long,
         coordinate: GeoCoordinate,

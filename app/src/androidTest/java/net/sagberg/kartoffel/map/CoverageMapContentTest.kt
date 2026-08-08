@@ -3,12 +3,15 @@ package net.sagberg.kartoffel.map
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -20,11 +23,14 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.espresso.Espresso.pressBack
 import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
 import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnosticsState
 import net.sagberg.kartoffel.diagnostics.LocationUpdateState
 import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
 import net.sagberg.kartoffel.coverage.GeoCoordinate
+import net.sagberg.kartoffel.coverage.CoverageCellId
+import net.sagberg.kartoffel.coverage.CoverageCellShape
 import net.sagberg.kartoffel.inspection.DiagnosticCellState
 import net.sagberg.kartoffel.inspection.DiagnosticProvenance
 import net.sagberg.kartoffel.inspection.DiagnosticSample
@@ -32,6 +38,7 @@ import net.sagberg.kartoffel.inspection.DiagnosticSampleCell
 import net.sagberg.kartoffel.inspection.TrackingInspectionFilter
 import net.sagberg.kartoffel.inspection.TrackingInspectionMeasurements
 import net.sagberg.kartoffel.inspection.TrackingInspectionSnapshot
+import net.sagberg.kartoffel.inspection.InspectionManualRouteClaim
 import net.sagberg.kartoffel.tracking.RecordingActivity
 import org.junit.Rule
 import org.junit.Assert.assertEquals
@@ -117,6 +124,7 @@ class CoverageMapContentTest {
         compose.onNodeWithText("Tracking inspection").assertIsDisplayed()
         compose.onNodeWithText("Enable Passive Tracking").assertIsDisplayed()
         compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
+        compose.onNodeWithText("Draw route").assertIsDisplayed()
         compose.onNodeWithText("Tracking inspection").performClick()
         compose.runOnIdle { assertEquals(true, inspectionOpened) }
         compose.onNodeWithContentDescription("More options").performClick()
@@ -131,7 +139,127 @@ class CoverageMapContentTest {
     }
 
     @Test
-    fun trackingInspectionIsUnmistakableReadOnlyAndHidesNormalActions() {
+    fun drawingSupportsMapEditsUndoCancelBackConfirmAndActiveRecording() {
+        val drawingActive = mutableStateOf(false)
+        val preview = mutableStateOf(ManualRoutePreview())
+        val routeDrawing = ManualRouteDrawing(pathBetween = { _, destination ->
+            if (destination.latitude >= 3.0) {
+                listOf(CoverageCellId(9), CoverageCellId(10))
+            } else {
+                listOf(CoverageCellId(1), CoverageCellId(2))
+            }
+        })
+        var confirmed = false
+        var stoppedRecording = false
+        compose.setContent {
+            MaterialTheme {
+                CoverageMapContent(
+                    hasLocationPermission = true,
+                    isRecordingSession = true,
+                    onRequestLocationPermission = {},
+                    onStartRecordingSession = {},
+                    onStopRecordingSession = { stoppedRecording = true },
+                    onCenterCurrentLocation = {},
+                    manualDrawingActive = drawingActive.value,
+                    manualRoutePreview = preview.value,
+                    onEnterManualDrawing = { drawingActive.value = true },
+                    onUndoManualWaypoint = {
+                        preview.value = routeDrawing.undo(preview.value)
+                    },
+                    onAddManualWaypoint = { preview.value = routeDrawing.add(preview.value, it) },
+                    onMoveManualWaypoint = { index, waypoint ->
+                        preview.value = routeDrawing.move(preview.value, index, waypoint)
+                    },
+                    onCancelManualDrawing = {
+                        drawingActive.value = false
+                        preview.value = ManualRoutePreview()
+                    },
+                    onConfirmManualRoute = {
+                        confirmed = true
+                        drawingActive.value = false
+                        preview.value = ManualRoutePreview()
+                    },
+                    map = { interactions ->
+                        Column {
+                            Box(
+                                Modifier.size(48.dp).testTag("fake_map_tap").clickable {
+                                    val next = interactions.preview.waypoints.size + 1.0
+                                    interactions.onMapClick(GeoCoordinate(next, next))
+                                },
+                            )
+                            Box(
+                                Modifier.size(48.dp).testTag("fake_waypoint_drag_end").clickable {
+                                    interactions.onWaypointDragEnd(1, GeoCoordinate(3.0, 3.0))
+                                },
+                            )
+                            if (interactions.preview.cells.isNotEmpty()) {
+                                Box(Modifier.size(1.dp).testTag("provisional_cell_preview"))
+                            }
+                            if (interactions.preview.waypoints.size >= 2) {
+                                Box(Modifier.size(1.dp).testTag("route_polyline_preview"))
+                            }
+                        }
+                    },
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Draw route").performClick()
+        compose.onNodeWithText("Draw route").assertIsDisplayed()
+        compose.onNodeWithText("Undo").assertIsNotEnabled()
+        compose.onNodeWithText("Confirm").assertIsNotEnabled()
+        compose.onNodeWithText("Stop recording", useUnmergedTree = true).assertIsDisplayed()
+
+        compose.onNodeWithTag("fake_map_tap").performClick()
+        compose.onNodeWithTag("fake_map_tap").performClick()
+        compose.onNodeWithContentDescription("Manual route preview: 2 waypoints, 2 cells")
+            .assertIsDisplayed()
+        compose.onNodeWithTag("provisional_cell_preview").assertIsDisplayed()
+        compose.onNodeWithTag("route_polyline_preview").assertIsDisplayed()
+        compose.onNodeWithTag("fake_waypoint_drag_end").performClick()
+        compose.runOnIdle {
+            assertEquals(listOf(9L, 10L), preview.value.cells.map { it.value })
+        }
+        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithText("Undo").assertIsNotEnabled()
+        compose.onNodeWithText("Confirm").assertIsNotEnabled()
+
+        compose.onNodeWithTag("fake_map_tap").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle { assertEquals(ManualRoutePreview(), preview.value) }
+
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Draw route").performClick()
+        pressBack()
+        compose.runOnIdle { assertEquals(false, drawingActive.value) }
+        compose.onAllNodesWithText("Discard route?").assertCountEquals(0)
+
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Draw route").performClick()
+        compose.onNodeWithTag("fake_map_tap").performClick()
+        pressBack()
+        compose.onNodeWithText("Discard route?").assertIsDisplayed()
+        compose.onNodeWithText("Keep drawing").performClick()
+        pressBack()
+        compose.onNodeWithText("Discard").performClick()
+        compose.runOnIdle { assertEquals(false, drawingActive.value) }
+
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Draw route").performClick()
+        compose.onNodeWithTag("fake_map_tap").performClick()
+        compose.onNodeWithTag("fake_map_tap").performClick()
+        compose.onNodeWithText("Stop recording", useUnmergedTree = true).performClick()
+        compose.runOnIdle { assertEquals(true, stoppedRecording) }
+        compose.onNodeWithText("Confirm").performClick()
+        compose.runOnIdle { assertEquals(true, confirmed) }
+        compose.onAllNodesWithText("Undo").assertCountEquals(0)
+        compose.runOnIdle { assertEquals(ManualRoutePreview(), preview.value) }
+    }
+
+    @Test
+    fun trackingInspectionHidesNormalMapActions() {
         var exited = false
         compose.setCoverageMapContent(
             hasLocationPermission = true,
@@ -140,7 +268,6 @@ class CoverageMapContentTest {
         )
 
         compose.onNodeWithText("Tracking Inspection").assertIsDisplayed()
-        compose.onNodeWithText("Read-only retained evidence").assertIsDisplayed()
         compose.onNodeWithTag("inspection_filter_controls").assertIsDisplayed()
         compose.onNodeWithText("All tracking").assertIsDisplayed()
         compose.onNodeWithText("All time").assertIsDisplayed()
@@ -150,6 +277,82 @@ class CoverageMapContentTest {
         compose.onAllNodesWithTag("settings_diagnostics_menu").assertCountEquals(0)
         compose.onNodeWithTag("exit_tracking_inspection").performClick()
         compose.runOnIdle { assertEquals(true, exited) }
+    }
+
+    @Test
+    fun trackingInspectionPreviewsAndConfirmsWithdrawalOfOneManualClaim() {
+        var selected: Long? = null
+        var withdrawn: Long? = null
+        val claim = InspectionManualRouteClaim(
+            id = 7,
+            createdAtMillis = 1_000,
+            cells = listOf(
+                CoverageCellShape(
+                    id = "123",
+                    boundary = listOf(
+                        GeoCoordinate(59.91, 10.75),
+                        GeoCoordinate(59.92, 10.75),
+                        GeoCoordinate(59.91, 10.76),
+                    ),
+                ),
+            ),
+        )
+        val snapshot = mutableStateOf(
+            TrackingInspectionSnapshot(
+                filter = TrackingInspectionFilter.Default,
+                availableScopes = emptyList(),
+                availableRecordingSessions = emptyList(),
+                cells = emptyList(),
+                measurements = TrackingInspectionMeasurements(0, 0, 0),
+                manualRouteClaims = listOf(claim),
+            ),
+        )
+        compose.setContent {
+            MaterialTheme {
+                CoverageMapContent(
+                    hasLocationPermission = true,
+                    isRecordingSession = false,
+                    onRequestLocationPermission = {},
+                    onStartRecordingSession = {},
+                    onStopRecordingSession = {},
+                    onCenterCurrentLocation = {},
+                    inspectionActive = true,
+                    inspectionSnapshot = snapshot.value,
+                    selectedManualRouteClaimId = selected,
+                    onSelectManualRouteClaim = { selected = it },
+                    onWithdrawManualRouteClaim = {
+                        withdrawn = it
+                        snapshot.value = snapshot.value.copy(manualRouteClaims = emptyList())
+                    },
+                    map = {
+                        Box(
+                            Modifier
+                                .size(1.dp)
+                                .testTag(
+                                    if (snapshot.value.manualRouteClaims.isEmpty()) {
+                                        "refreshed_effective_coverage"
+                                    } else {
+                                        "manual_claim_coverage_preview"
+                                    },
+                                ),
+                        )
+                    },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Manual Route Claim", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Preview").performClick()
+        compose.runOnIdle { assertEquals(7L, selected) }
+        compose.onNodeWithText("Withdraw").performClick()
+        compose.onNodeWithText("Withdraw Manual Route Claim?").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle { assertEquals(null, withdrawn) }
+        compose.onNodeWithText("Withdraw").performClick()
+        compose.onAllNodesWithText("Withdraw", useUnmergedTree = true)[1].performClick()
+        compose.runOnIdle { assertEquals(7L, withdrawn) }
+        compose.onAllNodesWithTag("manual_route_claim_7").assertCountEquals(0)
+        compose.onNodeWithTag("refreshed_effective_coverage").assertIsDisplayed()
     }
 
     @Test

@@ -28,6 +28,14 @@ internal class H3CoverageCells(
             GeoCoordinate(latitude = vertex.lat, longitude = vertex.lng)
         }
 
+    fun pathBetween(start: GeoCoordinate, destination: GeoCoordinate): List<CoverageCellId> =
+        h3.gridPathCells(cellAt(start).value, cellAt(destination).value).map(::CoverageCellId)
+
+    fun shapeOf(cell: CoverageCellId): CoverageCellShape = CoverageCellShape(
+        id = cell.value.toString(),
+        boundary = boundaryOf(cell),
+    )
+
     fun intermediateCellsForShortGap(
         start: CoverageCellId,
         destination: CoverageCellId,

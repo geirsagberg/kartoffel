@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
@@ -72,18 +75,25 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.TileOverlay
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberTileOverlayState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
+import net.sagberg.kartoffel.coverage.CoverageCellId
 import net.sagberg.kartoffel.R
 import net.sagberg.kartoffel.coverage.CoverageSnapshot
 import net.sagberg.kartoffel.coverage.GeoBounds
+import net.sagberg.kartoffel.coverage.GeoCoordinate
+import net.sagberg.kartoffel.coverage.H3CoverageCells
 import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
 import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
 import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnostics
@@ -241,9 +251,18 @@ private fun CoverageMapRoute(
     var inspectionFilter by remember { mutableStateOf(TrackingInspectionFilter.Default) }
     var inspectionSnapshot by remember { mutableStateOf<TrackingInspectionSnapshot?>(null) }
     var selectedInspectionCellId by remember { mutableStateOf<Long?>(null) }
+    var selectedManualRouteClaimId by remember { mutableStateOf<Long?>(null) }
     var inspectionSort by remember { mutableStateOf(SampleSort.NewestFirst) }
+    val manualRouteH3 = remember { H3CoverageCells() }
+    val manualRouteDrawing = remember(manualRouteH3) { ManualRouteDrawing(manualRouteH3) }
+    val manualRouteClaimRecorder = remember(database) {
+        ManualRouteClaimRecorder(database.manualRouteClaims())
+    }
+    var manualDrawingActive by remember { mutableStateOf(false) }
+    var manualRoutePreview by remember { mutableStateOf(ManualRoutePreview()) }
+    var effectiveCoverageCellIds by remember { mutableStateOf(emptySet<Long>()) }
     val persistedCoverage = remember(database) {
-        PersistedCoverageLoader(database.coverageCells())
+        PersistedCoverageLoader(database.coverageCells(), database.manualRouteClaims())
     }
     var hasLocationPermission by remember {
         mutableStateOf(context.hasForegroundLocationPermission())
@@ -337,10 +356,16 @@ private fun CoverageMapRoute(
 
     LaunchedEffect(database, persistedCoverage, fogTileProvider, fogTileOverlayState) {
         var hasLoadedInitialCoverage = false
-        database.coverageCells().observeAll()
-            .distinctUntilChangedBy { cells -> cells.map { cell -> cell.cellId } }
-            .collect { cells ->
-                fogTileProvider.updateCoverage(persistedCoverage.load(cells))
+        combine(
+            database.coverageCells().observeAll(),
+            database.manualRouteClaims().observeAllCellIds(),
+        ) { captured, manual -> captured to manual }
+            .distinctUntilChangedBy { (captured, manual) ->
+                captured.map { it.cellId } to manual
+            }
+            .collect { (captured, manual) ->
+                effectiveCoverageCellIds = (captured.map { it.cellId } + manual).toSet()
+                fogTileProvider.updateCoverage(persistedCoverage.load(captured, manual))
                 if (hasLoadedInitialCoverage) {
                     fogTileOverlayState.clearTileCache()
                 }
@@ -355,6 +380,7 @@ private fun CoverageMapRoute(
         }
         inspectionSnapshot = inspectionLoader.load(inspectionFilter)
         selectedInspectionCellId = null
+        selectedManualRouteClaimId = null
     }
 
     fun moveToCurrentLocation(zoom: Float) {
@@ -472,11 +498,50 @@ private fun CoverageMapRoute(
             inspectionActive = false
             inspectionFilter = TrackingInspectionFilter.Default
             selectedInspectionCellId = null
+            selectedManualRouteClaimId = null
             inspectionSort = SampleSort.NewestFirst
         },
         onInspectionFilterChange = { inspectionFilter = it },
         onInspectionSortChange = { inspectionSort = it },
-        map = {
+        selectedManualRouteClaimId = selectedManualRouteClaimId,
+        onSelectManualRouteClaim = { selectedManualRouteClaimId = it },
+        onWithdrawManualRouteClaim = { claimId ->
+            scope.launch {
+                database.manualRouteClaims().withdraw(claimId)
+                selectedManualRouteClaimId = null
+                inspectionSnapshot = inspectionLoader.load(inspectionFilter)
+            }
+        },
+        manualDrawingActive = manualDrawingActive,
+        manualRoutePreview = manualRoutePreview,
+        onEnterManualDrawing = {
+            manualRoutePreview = ManualRoutePreview()
+            manualDrawingActive = true
+        },
+        onUndoManualWaypoint = {
+            manualRoutePreview = manualRouteDrawing.undo(manualRoutePreview)
+        },
+        onAddManualWaypoint = { waypoint ->
+            manualRoutePreview = manualRouteDrawing.add(manualRoutePreview, waypoint)
+        },
+        onMoveManualWaypoint = { index, waypoint ->
+            manualRoutePreview = manualRouteDrawing.move(manualRoutePreview, index, waypoint)
+        },
+        onCancelManualDrawing = {
+            manualRoutePreview = ManualRoutePreview()
+            manualDrawingActive = false
+        },
+        onConfirmManualRoute = {
+            if (manualRoutePreview.canConfirm) {
+                scope.launch {
+                    if (manualRouteClaimRecorder.confirm(manualRoutePreview) != null) {
+                        manualRoutePreview = ManualRoutePreview()
+                        manualDrawingActive = false
+                    }
+                }
+            }
+        },
+        map = { manualRouteMap ->
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
@@ -486,7 +551,16 @@ private fun CoverageMapRoute(
                 uiSettings = MapUiSettings(
                     myLocationButtonEnabled = false,
                     zoomControlsEnabled = false,
-                )
+                ),
+                onMapClick = if (manualRouteMap.active) {
+                    { point ->
+                        manualRouteMap.onMapClick(
+                            GeoCoordinate(point.latitude, point.longitude),
+                        )
+                    }
+                } else {
+                    null
+                },
             ) {
                 TileOverlay(
                     tileProvider = fogTileProvider,
@@ -512,11 +586,84 @@ private fun CoverageMapRoute(
                             clickable = true,
                         )
                     }
+                    inspectionSnapshot?.manualRouteClaims
+                        ?.firstOrNull { it.id == selectedManualRouteClaimId }
+                        ?.cells
+                        ?.forEach { cell ->
+                            Polygon(
+                                points = cell.boundary.map { LatLng(it.latitude, it.longitude) },
+                                fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.62f),
+                                strokeColor = MaterialTheme.colorScheme.tertiary,
+                                strokeWidth = 5f,
+                                zIndex = 22f,
+                            )
+                        }
+                }
+                if (manualRouteMap.active) {
+                    manualRouteMap.preview.cells.forEach { cell ->
+                        Polygon(
+                            points = manualRouteH3.boundaryOf(cell).map {
+                                LatLng(it.latitude, it.longitude)
+                            },
+                            fillColor = if (cell.value in effectiveCoverageCellIds) {
+                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f)
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.46f)
+                            },
+                            strokeColor = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2f,
+                            zIndex = 20f,
+                        )
+                    }
+                    if (manualRouteMap.preview.waypoints.size >= 2) {
+                        Polyline(
+                            points = manualRouteMap.preview.waypoints.map {
+                                LatLng(it.latitude, it.longitude)
+                            },
+                            color = MaterialTheme.colorScheme.primary,
+                            width = 8f,
+                            zIndex = 22f,
+                        )
+                    }
+                    manualRouteMap.preview.waypoints.forEachIndexed { index, waypoint ->
+                        DraggableManualWaypoint(
+                            index = index,
+                            waypoint = waypoint,
+                            onDragEnd = { moved -> manualRouteMap.onWaypointDragEnd(index, moved) },
+                        )
+                    }
                 }
             }
         },
     )
 
+}
+
+@Composable
+private fun DraggableManualWaypoint(
+    index: Int,
+    waypoint: GeoCoordinate,
+    onDragEnd: (GeoCoordinate) -> Unit,
+) {
+    val markerState = remember(index) { MarkerState(LatLng(waypoint.latitude, waypoint.longitude)) }
+    LaunchedEffect(waypoint) {
+        if (!markerState.isDragging) {
+            markerState.position = LatLng(waypoint.latitude, waypoint.longitude)
+        }
+    }
+    var wasDragging by remember { mutableStateOf(false) }
+    LaunchedEffect(markerState.isDragging) {
+        if (wasDragging && !markerState.isDragging) {
+            onDragEnd(GeoCoordinate(markerState.position.latitude, markerState.position.longitude))
+        }
+        wasDragging = markerState.isDragging
+    }
+    Marker(
+        state = markerState,
+        draggable = true,
+        contentDescription = "Route waypoint ${index + 1}",
+        zIndex = 23f,
+    )
 }
 
 @Composable
@@ -544,8 +691,43 @@ internal fun CoverageMapContent(
     onExitTrackingInspection: () -> Unit = {},
     onInspectionFilterChange: (TrackingInspectionFilter) -> Unit = {},
     onInspectionSortChange: (SampleSort) -> Unit = {},
-    map: @Composable BoxScope.() -> Unit,
+    selectedManualRouteClaimId: Long? = null,
+    onSelectManualRouteClaim: (Long) -> Unit = {},
+    onWithdrawManualRouteClaim: (Long) -> Unit = {},
+    manualDrawingActive: Boolean = false,
+    manualRoutePreview: ManualRoutePreview = ManualRoutePreview(),
+    onEnterManualDrawing: () -> Unit = {},
+    onUndoManualWaypoint: () -> Unit = {},
+    onAddManualWaypoint: (GeoCoordinate) -> Unit = {},
+    onMoveManualWaypoint: (Int, GeoCoordinate) -> Unit = { _, _ -> },
+    onCancelManualDrawing: () -> Unit = {},
+    onConfirmManualRoute: () -> Unit = {},
+    map: @Composable BoxScope.(ManualRouteMapInteractions) -> Unit,
 ) {
+    var confirmDiscard by remember { mutableStateOf(false) }
+    BackHandler(enabled = manualDrawingActive) {
+        if (manualRoutePreview.waypoints.isEmpty()) {
+            onCancelManualDrawing()
+        } else {
+            confirmDiscard = true
+        }
+    }
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Discard route?") },
+            text = { Text("Your unconfirmed route will be lost.") },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) { Text("Keep drawing") }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscard = false
+                    onCancelManualDrawing()
+                }) { Text("Discard") }
+            },
+        )
+    }
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -560,6 +742,12 @@ internal fun CoverageMapContent(
                 inspectionActive = inspectionActive,
                 onEnterTrackingInspection = onEnterTrackingInspection,
                 onExitTrackingInspection = onExitTrackingInspection,
+                manualDrawingActive = manualDrawingActive,
+                manualRoutePreview = manualRoutePreview,
+                onEnterManualDrawing = onEnterManualDrawing,
+                onUndoManualWaypoint = onUndoManualWaypoint,
+                onCancelManualDrawing = onCancelManualDrawing,
+                onConfirmManualRoute = onConfirmManualRoute,
             )
         },
     ) { contentPadding ->
@@ -567,11 +755,43 @@ internal fun CoverageMapContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
-                .testTag("coverage_map_screen"),
+                .testTag("coverage_map_screen")
+                .then(
+                    if (manualDrawingActive) {
+                        Modifier.semantics {
+                            contentDescription =
+                                "Manual route preview: ${manualRoutePreview.waypoints.size} " +
+                                "waypoints, ${manualRoutePreview.cells.size} cells"
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
         ) {
-            map()
+            map(
+                ManualRouteMapInteractions(
+                    active = manualDrawingActive,
+                    preview = manualRoutePreview,
+                    onMapClick = onAddManualWaypoint,
+                    onWaypointDragEnd = onMoveManualWaypoint,
+                ),
+            )
 
-            if (!inspectionActive && liveTrackingDiagnostics.trackingActive) {
+            manualRoutePreview.failingSegmentIndex?.let { segmentIndex ->
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(12.dp)
+                        .testTag("manual_route_error"),
+                ) {
+                    Text(
+                        "Could not connect segment ${segmentIndex + 1}. Adjust its waypoints.",
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+
+            if (!inspectionActive && !manualDrawingActive && liveTrackingDiagnostics.trackingActive) {
                 LiveTrackingDiagnosticsPanel(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -588,8 +808,14 @@ internal fun CoverageMapContent(
                     sessions = inspectionSnapshot?.availableRecordingSessions.orEmpty(),
                     nowMillis = System.currentTimeMillis(),
                     loading = inspectionSnapshot == null,
-                    empty = inspectionSnapshot?.cells?.isEmpty() == true,
+                    empty = inspectionSnapshot?.let {
+                        it.cells.isEmpty() && it.manualRouteClaims.isEmpty()
+                    } == true,
                     onFilterChange = onInspectionFilterChange,
+                    manualRouteClaims = inspectionSnapshot?.manualRouteClaims.orEmpty(),
+                    selectedManualRouteClaimId = selectedManualRouteClaimId,
+                    onSelectManualRouteClaim = onSelectManualRouteClaim,
+                    onWithdrawManualRouteClaim = onWithdrawManualRouteClaim,
                 )
                 inspectionSnapshot?.cells?.firstOrNull { it.cellId == selectedInspectionCellId }
                     ?.let { cell ->
@@ -805,16 +1031,26 @@ private fun CoverageMapTopAppBar(
     inspectionActive: Boolean,
     onEnterTrackingInspection: () -> Unit,
     onExitTrackingInspection: () -> Unit,
+    manualDrawingActive: Boolean,
+    manualRoutePreview: ManualRoutePreview,
+    onEnterManualDrawing: () -> Unit,
+    onUndoManualWaypoint: () -> Unit,
+    onCancelManualDrawing: () -> Unit,
+    onConfirmManualRoute: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     TopAppBar(
         title = {
             Column {
-                Text(if (inspectionActive) "Tracking Inspection" else "Kartoffel")
-                if (inspectionActive) {
-                    Text("Read-only retained evidence", style = MaterialTheme.typography.labelSmall)
-                } else Text(
+                Text(
+                    when {
+                        inspectionActive -> "Tracking Inspection"
+                        manualDrawingActive -> "Draw route"
+                        else -> "Kartoffel"
+                    },
+                )
+                if (!inspectionActive) Text(
                     modifier = Modifier.testTag("passive_tracking_status"),
                     text = if (isRecordingSession) {
                         if (isPassiveTrackingEnabled) {
@@ -844,6 +1080,18 @@ private fun CoverageMapTopAppBar(
                 ) { Text("Exit") }
                 return@TopAppBar
             }
+            if (manualDrawingActive) {
+                TextButton(
+                    onClick = onUndoManualWaypoint,
+                    enabled = manualRoutePreview.waypoints.isNotEmpty(),
+                ) { Text("Undo") }
+                TextButton(onClick = onCancelManualDrawing) { Text("Cancel") }
+                TextButton(
+                    onClick = onConfirmManualRoute,
+                    enabled = manualRoutePreview.canConfirm,
+                ) { Text("Confirm") }
+                return@TopAppBar
+            }
             IconButton(
                 modifier = Modifier.testTag("settings_diagnostics_menu"),
                 onClick = { menuExpanded = true },
@@ -857,6 +1105,13 @@ private fun CoverageMapTopAppBar(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
             ) {
+                DropdownMenuItem(
+                    text = { Text("Draw route") },
+                    onClick = {
+                        menuExpanded = false
+                        onEnterManualDrawing()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text("Tracking inspection") },
                     onClick = {

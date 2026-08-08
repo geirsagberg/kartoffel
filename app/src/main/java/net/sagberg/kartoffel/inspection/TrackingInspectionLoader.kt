@@ -54,6 +54,15 @@ internal class TrackingInspectionLoader(
             }
             val sessions = database.recordingSessions().all()
             val durableEvidence = database.coverageCells().all()
+            val manualRouteClaims = database.manualRouteClaims().allClaims().map { claim ->
+                InspectionManualRouteClaim(
+                    id = claim.id,
+                    createdAtMillis = claim.createdAtMillis,
+                    cells = database.manualRouteClaims().cellsForClaim(claim.id).map { cellId ->
+                        h3.shapeOf(CoverageCellId(cellId))
+                    },
+                )
+            }
             val sessionPoints = (filter.scope as? TrackingInspectionScope.RecordingSession)?.let {
                 database.recordingSessionPoints().forSession(it.id)
             }.orEmpty()
@@ -122,6 +131,7 @@ internal class TrackingInspectionLoader(
                 },
                 cells = cells,
                 measurements = measurements,
+                manualRouteClaims = manualRouteClaims,
             )
             val total = prepared - started
             if (total > SLOW_LOAD_MILLIS) {

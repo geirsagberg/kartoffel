@@ -22,6 +22,8 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 - **Coverage Evidence:** retained information explaining why a cell is considered visited.
 - **Observed Coverage Evidence:** Coverage Evidence created when an accepted Location Sample directly falls within a Coverage Cell.
 - **Inferred Coverage Evidence:** Coverage Evidence created when Conservative Interpolation clears a Coverage Cell between accepted Location Samples without directly observing it.
+- **Manual Route Claim:** the user's deliberate retrospective claim that they travelled approximately along a user-authored route, without asserting when. Each confirmation remains distinct so it can be withdrawn without removing other Coverage Evidence.
+- **Manual Coverage Evidence:** Coverage Evidence created by a Manual Route Claim.
 - **Accuracy-Gated Clearing:** rejecting evidence that is too inaccurate to clear fog safely.
 - **Conservative Interpolation:** filling short, plausible gaps between samples. When several equally short local routes are credible, all may be filled.
 - **Passive Gap:** a visited place left covered because passive evidence was insufficient.

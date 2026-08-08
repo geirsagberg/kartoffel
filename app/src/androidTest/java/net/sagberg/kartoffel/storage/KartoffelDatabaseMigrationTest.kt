@@ -29,7 +29,7 @@ class KartoffelDatabaseMigrationTest {
 
         val database = Room.databaseBuilder(context, KartoffelDatabase::class.java, databaseName)
             .setDriver(AndroidSQLiteDriver())
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .allowMainThreadQueries()
             .build()
         try {
@@ -40,6 +40,8 @@ class KartoffelDatabaseMigrationTest {
             assertEquals(11L, database.recordingSessionPoints().forSession(7).single().sampleId)
             assertEquals(1, database.coverageCells().find(123)?.evidenceMask)
             assertEquals(false, PassiveTrackingPreferences(database.trackingSettings()).current().enabled)
+            assertEquals(emptyList<ManualRouteClaimSummary>(), database.manualRouteClaims().allClaims())
+            assertEquals(emptyList<Long>(), database.manualRouteClaims().allCellIds())
         } finally {
             database.close()
         }
