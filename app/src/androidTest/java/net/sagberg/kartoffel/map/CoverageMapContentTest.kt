@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -342,6 +344,7 @@ class CoverageMapContentTest {
         }
 
         compose.onNodeWithText("Manual Route Claim", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("withdraw_manual_route_claim_7").assertWidthIsAtLeast(64.dp)
         compose.onNodeWithText("Preview").performClick()
         compose.runOnIdle { assertEquals(7L, selected) }
         compose.onNodeWithText("Withdraw").performClick()
@@ -353,6 +356,38 @@ class CoverageMapContentTest {
         compose.runOnIdle { assertEquals(7L, withdrawn) }
         compose.onAllNodesWithTag("manual_route_claim_7").assertCountEquals(0)
         compose.onNodeWithTag("refreshed_effective_coverage").assertIsDisplayed()
+    }
+
+    @Test
+    fun manualRouteClaimListIsHeightLimitedWithUsableActions() {
+        val boundary = listOf(
+            GeoCoordinate(59.91, 10.75),
+            GeoCoordinate(59.92, 10.75),
+            GeoCoordinate(59.91, 10.76),
+        )
+        val claims = (1L..6L).map { id ->
+            InspectionManualRouteClaim(
+                id = id,
+                createdAtMillis = id * 1_000,
+                cells = listOf(CoverageCellShape(id.toString(), boundary)),
+            )
+        }
+        val snapshot = TrackingInspectionSnapshot(
+            filter = TrackingInspectionFilter.Default,
+            availableScopes = emptyList(),
+            availableRecordingSessions = emptyList(),
+            cells = emptyList(),
+            measurements = TrackingInspectionMeasurements(0, 0, 0),
+            manualRouteClaims = claims,
+        )
+        compose.setCoverageMapContent(
+            hasLocationPermission = true,
+            inspectionActive = true,
+            inspectionSnapshot = snapshot,
+        )
+
+        compose.onNodeWithTag("manual_route_claim_list").assertHeightIsEqualTo(220.dp)
+        compose.onNodeWithTag("withdraw_manual_route_claim_1").assertWidthIsAtLeast(64.dp)
     }
 
     @Test

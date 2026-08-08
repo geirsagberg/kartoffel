@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.Instant
 import java.time.LocalDateTime
@@ -233,18 +235,51 @@ internal fun TrackingInspectionControls(
             }
 
             InspectionLegend()
-            manualRouteClaims.forEach { claim ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().testTag("manual_route_claim_${claim.id}"),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+            if (manualRouteClaims.isNotEmpty()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .testTag("manual_route_claim_list"),
                 ) {
-                    Text("Manual Route Claim · ${claim.createdAtMillis.compactTime()}")
-                    Row {
-                        TextButton(onClick = { onSelectManualRouteClaim(claim.id) }) {
-                            Text(if (selectedManualRouteClaimId == claim.id) "Previewing" else "Preview")
+                    itemsIndexed(manualRouteClaims, key = { _, claim -> claim.id }) { index, claim ->
+                        if (index > 0) HorizontalDivider()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                                .testTag("manual_route_claim_${claim.id}"),
+                        ) {
+                            Text(
+                                "Manual Route Claim · ${claim.createdAtMillis.compactTime()}",
+                                modifier = Modifier.fillMaxWidth(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                            ) {
+                                TextButton(onClick = { onSelectManualRouteClaim(claim.id) }) {
+                                    Text(
+                                        if (selectedManualRouteClaimId == claim.id) {
+                                            "Previewing"
+                                        } else {
+                                            "Preview"
+                                        },
+                                        maxLines = 1,
+                                    )
+                                }
+                                TextButton(
+                                    modifier = Modifier.testTag(
+                                        "withdraw_manual_route_claim_${claim.id}",
+                                    ),
+                                    onClick = { pendingWithdrawal = claim },
+                                ) {
+                                    Text("Withdraw", maxLines = 1)
+                                }
+                            }
                         }
-                        TextButton(onClick = { pendingWithdrawal = claim }) { Text("Withdraw") }
                     }
                 }
             }
