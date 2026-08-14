@@ -13,18 +13,28 @@ class CoverageMapStateTest {
             shouldRequestForegroundLocation(
                 hasLocationPermission = false,
                 observedFirstFix = false,
+                shouldCenterOnFirstFix = true,
             )
         )
         assertTrue(
             shouldRequestForegroundLocation(
                 hasLocationPermission = true,
                 observedFirstFix = false,
+                shouldCenterOnFirstFix = true,
             )
         )
         assertFalse(
             shouldRequestForegroundLocation(
                 hasLocationPermission = true,
                 observedFirstFix = true,
+                shouldCenterOnFirstFix = true,
+            )
+        )
+        assertFalse(
+            shouldRequestForegroundLocation(
+                hasLocationPermission = true,
+                observedFirstFix = false,
+                shouldCenterOnFirstFix = false,
             )
         )
     }
