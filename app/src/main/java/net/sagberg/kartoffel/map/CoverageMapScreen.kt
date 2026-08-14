@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -74,6 +74,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.tasks.CancellationTokenSource
+import com.google.maps.android.compose.CameraMoveStartedReason
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
@@ -268,6 +269,8 @@ private fun CoverageMapRoute(
         mutableStateOf(context.hasForegroundLocationPermission())
     }
     var firstFix by remember { mutableStateOf<MapCoordinate?>(null) }
+    val cameraPreferences = remember(context) { MapCameraPreferences(context) }
+    val savedCameraPosition = remember(cameraPreferences) { cameraPreferences.load() }
     val activeRecordingSession by database.recordingSessions().observeActive().collectAsState(
         initial = null,
     )
@@ -278,7 +281,9 @@ private fun CoverageMapRoute(
     val passiveTrackingPreference by passiveTrackingPreferences.observe().collectAsState(
         initial = PassiveTrackingPreference.Disabled,
     )
-    var centeredOnFirstFix by rememberSaveable { mutableStateOf(false) }
+    var startupCameraResolved by rememberSaveable {
+        mutableStateOf(savedCameraPosition != null)
+    }
     val liveTrackingDiagnostics by LiveTrackingDiagnostics.processInstance.state.collectAsState()
     var diagnosticsNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -331,11 +336,21 @@ private fun CoverageMapRoute(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val fallbackCameraTarget = remember { LatLng(59.9139, 10.7522) }
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(fallbackCameraTarget, 12f)
+        position = savedCameraPosition ?: CameraPosition.fromLatLngZoom(
+            LatLng(59.9139, 10.7522),
+            12f,
+        )
     }
     val cameraIsMoving = cameraPositionState.isMoving
+    val cameraMoveStartedReason = cameraPositionState.cameraMoveStartedReason
+    LaunchedEffect(cameraIsMoving, cameraMoveStartedReason, startupCameraResolved) {
+        val shouldPersistCamera = startupCameraResolved ||
+            cameraMoveStartedReason == CameraMoveStartedReason.GESTURE
+        if (!cameraIsMoving && shouldPersistCamera) {
+            cameraPreferences.save(cameraPositionState.position)
+        }
+    }
     val visibleInspectionCells = inspectionSnapshot?.let { snapshot ->
         val bounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
         if (bounds == null || bounds.southwest.longitude > bounds.northeast.longitude) {
@@ -407,7 +422,12 @@ private fun CoverageMapRoute(
     }
 
     DisposableEffect(hasLocationPermission, firstFix, context, fusedLocationClient) {
-        if (!shouldRequestForegroundLocation(hasLocationPermission, firstFix != null)) {
+        val shouldRequestLocation = shouldRequestForegroundLocation(
+            hasLocationPermission = hasLocationPermission,
+            observedFirstFix = firstFix != null,
+            shouldCenterOnFirstFix = !startupCameraResolved,
+        )
+        if (!shouldRequestLocation) {
             onDispose {}
         } else {
             val locationCallback = object : LocationCallback() {
@@ -440,7 +460,7 @@ private fun CoverageMapRoute(
     }
 
     LaunchedEffect(firstFix) {
-        val request = firstFixCameraRequest(firstFix, centeredOnFirstFix)
+        val request = firstFixCameraRequest(firstFix, startupCameraResolved)
             ?: return@LaunchedEffect
 
         cameraPositionState.animate(
@@ -449,7 +469,8 @@ private fun CoverageMapRoute(
                 request.zoom,
             )
         )
-        centeredOnFirstFix = true
+        cameraPreferences.save(cameraPositionState.position)
+        startupCameraResolved = true
     }
 
     CoverageMapContent(
@@ -842,7 +863,7 @@ internal fun CoverageMapContent(
                     FloatingActionButton(
                         modifier = Modifier.size(48.dp),
                         onClick = onCenterCurrentLocation,
-                        shape = CircleShape,
+                        shape = RoundedCornerShape(12.dp),
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.primary,
                         elevation = FloatingActionButtonDefaults.elevation(
