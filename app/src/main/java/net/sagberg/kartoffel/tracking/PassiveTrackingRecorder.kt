@@ -6,7 +6,6 @@ import net.sagberg.kartoffel.coverage.CoverageLocationDecision
 import net.sagberg.kartoffel.coverage.ShortGapInterpolationPolicy
 import net.sagberg.kartoffel.storage.CoverageEvidenceSource
 import net.sagberg.kartoffel.storage.KartoffelDatabase
-import net.sagberg.kartoffel.storage.RoomCoverageSettings
 
 internal const val PASSIVE_ACCURACY_REJECTION = "accuracy_exceeds_passive_limit"
 internal const val MAXIMUM_PASSIVE_INTERPOLATION_GAP_MILLIS = 120_000L
@@ -22,7 +21,7 @@ internal class PassiveTrackingRecorder(
     database: KartoffelDatabase,
 ) {
     private val evidenceRecorder = CoverageEvidenceRecorder(database)
-    private val coverageSettings = RoomCoverageSettings(database.coverageSettings())
+    private val coverageSettings = database.coverageSettingsRepository
 
     suspend fun record(
         fix: RecordingLocationFix,

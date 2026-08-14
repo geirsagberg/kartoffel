@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import net.sagberg.kartoffel.diagnostics.TrackingDiagnosticsRoute
@@ -34,6 +35,7 @@ internal enum class KartoffelDestination { MAP, SETTINGS, TRACKING_DIAGNOSTICS }
 @Composable
 internal fun KartoffelApp() {
     var destination by rememberSaveable { mutableStateOf(KartoffelDestination.MAP) }
+    val settingsPersistenceScope = rememberCoroutineScope()
     KartoffelTheme {
         when (destination) {
             KartoffelDestination.MAP -> CoverageMapScreen(
@@ -44,7 +46,10 @@ internal fun KartoffelApp() {
             )
             KartoffelDestination.SETTINGS -> {
                 BackHandler { destination = KartoffelDestination.MAP }
-                CoverageSettingsRoute(onBack = { destination = KartoffelDestination.MAP })
+                CoverageSettingsRoute(
+                    persistenceScope = settingsPersistenceScope,
+                    onBack = { destination = KartoffelDestination.MAP },
+                )
             }
             KartoffelDestination.TRACKING_DIAGNOSTICS -> {
                 BackHandler { destination = KartoffelDestination.MAP }

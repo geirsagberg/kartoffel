@@ -108,6 +108,10 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
 
     abstract fun coverageSettings(): CoverageSettingsDao
 
+    val coverageSettingsRepository: RoomCoverageSettings by lazy {
+        RoomCoverageSettings(coverageSettings())
+    }
+
     companion object {
         internal const val NAME = "kartoffel.db"
         internal const val VERSION = 7

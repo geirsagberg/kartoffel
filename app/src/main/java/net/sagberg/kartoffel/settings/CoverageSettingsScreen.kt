@@ -19,34 +19,42 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import net.sagberg.kartoffel.storage.KartoffelDatabase
-import net.sagberg.kartoffel.storage.RoomCoverageSettings
 import kotlin.math.roundToInt
 
 @Composable
-internal fun CoverageSettingsRoute(onBack: () -> Unit) {
+internal fun CoverageSettingsRoute(
+    persistenceScope: CoroutineScope,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     val database = remember(context) { KartoffelDatabase.open(context) }
-    val repository = remember(database) { RoomCoverageSettings(database.coverageSettings()) }
+    val repository = remember(database) { database.coverageSettingsRepository }
     val settings by repository.observe().collectAsState(initial = CoverageSettings.Default)
-    val scope = rememberCoroutineScope()
 
     CoverageSettingsScreen(
         settings = settings,
         onMaximumAcceptedAccuracyChangeFinished = { value ->
-            scope.launch { repository.setMaximumAcceptedAccuracyMeters(value) }
+            persistenceScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                repository.setMaximumAcceptedAccuracyMeters(value)
+            }
         },
         onMaximumInterpolationGapChangeFinished = { value ->
-            scope.launch { repository.setMaximumInterpolationGapSteps(value) }
+            persistenceScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                repository.setMaximumInterpolationGapSteps(value)
+            }
         },
-        onReset = { scope.launch { repository.reset() } },
+        onReset = {
+            persistenceScope.launch(start = CoroutineStart.UNDISPATCHED) { repository.reset() }
+        },
         onBack = onBack,
     )
 }

@@ -6,7 +6,7 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 
 - **Minimal by Default:** keep the main experience focused; put tuning and detail in secondary surfaces.
 - **Local-First:** work without an account and keep location history under device-local control.
-- **Clearly False Coverage is worse than a Passive Gap:** short, locally plausible ambiguity may clear every credible route; implausible jumps should leave fog in place.
+- **Clearly False Coverage is worse than a Passive Gap:** short, locally plausible ambiguity may clear one credible route; implausible jumps should leave fog in place.
 - **Good Enough History:** passive capture should make the map useful without obvious battery cost or requiring deliberate recording.
 
 ## Language

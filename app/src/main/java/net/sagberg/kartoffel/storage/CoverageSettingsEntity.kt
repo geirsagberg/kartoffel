@@ -8,6 +8,8 @@ import androidx.room3.Query
 import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import net.sagberg.kartoffel.settings.CoverageSettings
 import net.sagberg.kartoffel.settings.CoverageSettingsRepository
 
@@ -43,39 +45,65 @@ internal interface CoverageSettingsDao {
     @Query(
         "INSERT INTO coverage_settings " +
             "(id, maximum_accepted_accuracy_meters, maximum_interpolation_gap_steps) " +
-            "VALUES (1, :value, 3) ON CONFLICT(id) DO UPDATE SET " +
+            "VALUES (1, :value, :defaultInterpolationGapSteps) " +
+            "ON CONFLICT(id) DO UPDATE SET " +
             "maximum_accepted_accuracy_meters = :value",
     )
-    suspend fun setMaximumAcceptedAccuracyMeters(value: Int)
+    suspend fun setMaximumAcceptedAccuracyMeters(
+        value: Int,
+        defaultInterpolationGapSteps: Int,
+    )
 
     @Query(
         "INSERT INTO coverage_settings " +
             "(id, maximum_accepted_accuracy_meters, maximum_interpolation_gap_steps) " +
-            "VALUES (1, 25, :value) ON CONFLICT(id) DO UPDATE SET " +
+            "VALUES (1, :defaultAcceptedAccuracyMeters, :value) " +
+            "ON CONFLICT(id) DO UPDATE SET " +
             "maximum_interpolation_gap_steps = :value",
     )
-    suspend fun setMaximumInterpolationGapSteps(value: Int)
+    suspend fun setMaximumInterpolationGapSteps(
+        value: Int,
+        defaultAcceptedAccuracyMeters: Int,
+    )
 }
 
 internal class RoomCoverageSettings(
     private val dao: CoverageSettingsDao,
 ) : CoverageSettingsRepository {
+    private val updateMutex = Mutex()
+
     override fun observe(): Flow<CoverageSettings> = dao.observe().map { it.toSettings() }
 
-    override suspend fun current(): CoverageSettings = dao.current().toSettings()
+    override suspend fun current(): CoverageSettings = updateMutex.withLock {
+        dao.current().toSettings()
+    }
 
     override suspend fun setMaximumAcceptedAccuracyMeters(value: Int) {
         CoverageSettings.Default.copy(maximumAcceptedAccuracyMeters = value)
-        dao.setMaximumAcceptedAccuracyMeters(value)
+        updateMutex.withLock {
+            dao.setMaximumAcceptedAccuracyMeters(
+                value = value,
+                defaultInterpolationGapSteps = CoverageSettings.Default
+                    .maximumInterpolationGapSteps,
+            )
+        }
     }
 
     override suspend fun setMaximumInterpolationGapSteps(value: Int) {
         CoverageSettings.Default.copy(maximumInterpolationGapSteps = value)
-        dao.setMaximumInterpolationGapSteps(value)
+        updateMutex.withLock {
+            dao.setMaximumInterpolationGapSteps(
+                value = value,
+                defaultAcceptedAccuracyMeters = CoverageSettings.Default
+                    .maximumAcceptedAccuracyMeters,
+            )
+        }
     }
 
     override suspend fun reset() {
-        dao.upsert(CoverageSettings.Default.toEntity())
+        updateMutex.withLock {
+            dao.upsert(CoverageSettings.Default.toEntity())
+        }
     }
 }
 

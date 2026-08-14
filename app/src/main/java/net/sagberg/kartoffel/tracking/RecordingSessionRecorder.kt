@@ -10,7 +10,6 @@ import net.sagberg.kartoffel.storage.CoverageEvidenceSource
 import net.sagberg.kartoffel.storage.KartoffelDatabase
 import net.sagberg.kartoffel.storage.PersistedActivityMode
 import net.sagberg.kartoffel.storage.RecordingSessionEntity
-import net.sagberg.kartoffel.storage.RoomCoverageSettings
 
 internal const val RECORDING_ACCURACY_REJECTION = "accuracy_exceeds_recording_limit"
 
@@ -24,7 +23,7 @@ internal class RecordingSessionRecorder(
     coverageCells: H3CoverageCells = H3CoverageCells(),
 ) : RecordingSessionGateway {
     private val evidenceRecorder = CoverageEvidenceRecorder(database, coverageCells)
-    private val coverageSettings = RoomCoverageSettings(database.coverageSettings())
+    private val coverageSettings = database.coverageSettingsRepository
 
     override suspend fun activeSessionId(): Long? =
         database.recordingSessions().observeActive().first()?.id
