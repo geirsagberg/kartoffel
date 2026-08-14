@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import net.sagberg.kartoffel.diagnostics.TrackingDiagnosticsRoute
 import net.sagberg.kartoffel.map.CoverageMapScreen
+import net.sagberg.kartoffel.settings.CoverageSettingsRoute
 import net.sagberg.kartoffel.ui.theme.KartoffelTheme
 
 class MainActivity : ComponentActivity() {
@@ -28,7 +29,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal enum class KartoffelDestination { MAP, TRACKING_DIAGNOSTICS }
+internal enum class KartoffelDestination { MAP, SETTINGS, TRACKING_DIAGNOSTICS }
 
 @Composable
 internal fun KartoffelApp() {
@@ -36,10 +37,15 @@ internal fun KartoffelApp() {
     KartoffelTheme {
         when (destination) {
             KartoffelDestination.MAP -> CoverageMapScreen(
+                onOpenSettings = { destination = KartoffelDestination.SETTINGS },
                 onOpenTrackingDiagnostics = {
                     destination = KartoffelDestination.TRACKING_DIAGNOSTICS
                 },
             )
+            KartoffelDestination.SETTINGS -> {
+                BackHandler { destination = KartoffelDestination.MAP }
+                CoverageSettingsRoute(onBack = { destination = KartoffelDestination.MAP })
+            }
             KartoffelDestination.TRACKING_DIAGNOSTICS -> {
                 BackHandler { destination = KartoffelDestination.MAP }
                 TrackingDiagnosticsRoute(onBack = { destination = KartoffelDestination.MAP })

@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import net.sagberg.kartoffel.coverage.GeoCoordinate
 import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.storage.RoomCoverageSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -47,7 +48,7 @@ class PassiveTrackingRecorderTest {
             fix = RecordingLocationFix(
                 coordinate = GeoCoordinate(59.91, 10.75),
                 capturedAtMillis = 3_000,
-                accuracyMeters = 21.0,
+                accuracyMeters = 26.0,
             ),
             trigger = PassiveFixTrigger.FALLBACK_WINDOW,
             activity = RecordingActivity.UNKNOWN,
@@ -65,7 +66,35 @@ class PassiveTrackingRecorderTest {
     }
 
     @Test
-    fun nearbyConsecutiveAcceptedPassiveFixesUseShortGapInterpolation() = runBlocking {
+    fun changedAccuracySettingAppliesToTheNextPassiveFix() = runBlocking {
+        val settings = RoomCoverageSettings(database.coverageSettings())
+        val firstFix = RecordingLocationFix(
+            coordinate = GeoCoordinate(59.9109, 10.7522),
+            capturedAtMillis = 2_000,
+            accuracyMeters = 21.0,
+        )
+
+        settings.setMaximumAcceptedAccuracyMeters(20)
+        val rejected = recorder.record(
+            firstFix,
+            PassiveFixTrigger.FALLBACK_WINDOW,
+            RecordingActivity.UNKNOWN,
+        )
+        settings.setMaximumAcceptedAccuracyMeters(25)
+        val accepted = recorder.record(
+            firstFix.copy(capturedAtMillis = 3_000),
+            PassiveFixTrigger.FALLBACK_WINDOW,
+            RecordingActivity.UNKNOWN,
+        )
+
+        assertEquals(false, rejected.accepted)
+        assertEquals(true, accepted.accepted)
+    }
+
+    @Test
+    fun changedInterpolationSettingAppliesToTheNextPassiveFix() = runBlocking {
+        val settings = RoomCoverageSettings(database.coverageSettings())
+        settings.setMaximumInterpolationGapSteps(1)
         recorder.record(
             RecordingLocationFix(
                 GeoCoordinate(59.9109, 10.7522),
@@ -84,16 +113,20 @@ class PassiveTrackingRecorderTest {
             PassiveFixTrigger.MOVEMENT_WINDOW,
             RecordingActivity.WALKING,
         )
+        assertEquals(2, database.coverageCells().all().size)
 
-        assertEquals(
-            setOf(
-                626169207098265599,
-                626169207099809791,
-                626169207099793407,
-                626169207098388479,
+        settings.setMaximumInterpolationGapSteps(3)
+        recorder.record(
+            RecordingLocationFix(
+                GeoCoordinate(59.9109, 10.7522),
+                capturedAtMillis = 63_000,
+                accuracyMeters = 8.0,
             ),
-            database.coverageCells().all().map { it.cellId }.toSet(),
+            PassiveFixTrigger.MOVEMENT_WINDOW,
+            RecordingActivity.WALKING,
         )
+
+        assertEquals(3, database.coverageCells().all().size)
     }
 
     @Test

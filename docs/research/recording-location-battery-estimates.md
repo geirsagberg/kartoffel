@@ -2,6 +2,8 @@
 
 Date: 2026-07-17
 
+The interpolation rule below records the recommendation at the time of this research. The current configurable policy is defined in [`docs/mvp-spec.md`](../mvp-spec.md).
+
 ## Bottom line
 
 Changing Kartoffel's sustained high-accuracy recording interval from 1 second to 5 seconds should reduce callback, CPU, and database work by roughly 80%, but it probably will **not** reduce total location power by 80%. At intervals this short, the fused provider may keep GNSS warm or continuously active. The defensible planning estimate is therefore:

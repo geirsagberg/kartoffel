@@ -26,6 +26,7 @@ internal data class CoverageEvidenceRules(
     val source: CoverageEvidenceSource,
     val trigger: String?,
     val maximumAccuracyMeters: Double,
+    val maximumInterpolationGapSteps: Int,
     val accuracyRejectionReason: String,
     val shortGapInterpolation: ShortGapInterpolationPolicy? = null,
 )
@@ -101,9 +102,10 @@ internal class CoverageEvidenceRecorder(
                     val previousPoint = database.recordingSessionPoints()
                         .lastForSession(recordingSessionId)
                     previousPoint?.let { observedPoint ->
-                        coverageCells.intermediateCellsForShortGap(
+                        coverageCells.intermediateCellsForGap(
                             start = CoverageCellId(observedPoint.cellId),
                             destination = acceptedCell,
+                            maximumGapSteps = rules.maximumInterpolationGapSteps,
                         ).forEach { inferredCell ->
                             database.coverageCells().upsert(
                                 cellId = inferredCell.value,
@@ -126,7 +128,7 @@ internal class CoverageEvidenceRecorder(
                     fix.capturedAtMillis - previousPassiveSample.capturedAtMillis <=
                     checkNotNull(rules.shortGapInterpolation).maximumGapMillis
                 ) {
-                    coverageCells.intermediateCellsForShortGap(
+                    coverageCells.intermediateCellsForGap(
                         start = coverageCells.cellAt(
                             GeoCoordinate(
                                 latitude = previousPassiveSample.latitude,
@@ -134,6 +136,7 @@ internal class CoverageEvidenceRecorder(
                             ),
                         ),
                         destination = acceptedCell,
+                        maximumGapSteps = rules.maximumInterpolationGapSteps,
                     ).forEach { inferredCell ->
                         database.coverageCells().upsert(
                             cellId = inferredCell.value,

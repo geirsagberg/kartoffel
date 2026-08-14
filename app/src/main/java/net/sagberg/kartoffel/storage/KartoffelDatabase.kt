@@ -61,6 +61,24 @@ internal val MIGRATION_5_6 = Migration(5, 6) { connection ->
     )
 }
 
+internal val MIGRATION_6_7 = Migration(6, 7) { connection ->
+    connection.execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS coverage_settings (
+            id INTEGER NOT NULL,
+            maximum_accepted_accuracy_meters INTEGER NOT NULL,
+            maximum_interpolation_gap_steps INTEGER NOT NULL,
+            PRIMARY KEY(id)
+        )
+        """.trimIndent(),
+    )
+    connection.execSQL(
+        "INSERT INTO coverage_settings " +
+            "(id, maximum_accepted_accuracy_meters, maximum_interpolation_gap_steps) " +
+            "VALUES (1, 25, 3)",
+    )
+}
+
 @Database(
     entities = [
         CoverageCellEntity::class,
@@ -70,8 +88,9 @@ internal val MIGRATION_5_6 = Migration(5, 6) { connection ->
         TrackingSettingsEntity::class,
         ManualRouteClaimEntity::class,
         ManualRouteClaimCellEntity::class,
+        CoverageSettingsEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 internal abstract class KartoffelDatabase : RoomDatabase() {
@@ -87,9 +106,11 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
 
     abstract fun manualRouteClaims(): ManualRouteClaimDao
 
+    abstract fun coverageSettings(): CoverageSettingsDao
+
     companion object {
         internal const val NAME = "kartoffel.db"
-        internal const val VERSION = 6
+        internal const val VERSION = 7
 
         @Volatile
         private var instance: KartoffelDatabase? = null
@@ -102,7 +123,13 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
                     NAME,
                 )
                 .setDriver(AndroidSQLiteDriver())
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                )
                 .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
                 .build()
                 .also { instance = it }

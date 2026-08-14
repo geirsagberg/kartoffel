@@ -120,6 +120,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Composable
 internal fun CoverageMapScreen(
+    onOpenSettings: () -> Unit = {},
     onOpenTrackingDiagnostics: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -170,6 +171,7 @@ internal fun CoverageMapScreen(
         },
     ) {
         CoverageMapRoute(
+            onOpenSettings = onOpenSettings,
             onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
             onBackupDatabase = {
                 backupLauncher.launch("kartoffel-backup-${System.currentTimeMillis()}.db")
@@ -236,6 +238,7 @@ internal fun DatabaseRestoreGate(
 @Composable
 @SuppressLint("MissingPermission")
 private fun CoverageMapRoute(
+    onOpenSettings: () -> Unit,
     onOpenTrackingDiagnostics: () -> Unit,
     onBackupDatabase: () -> Unit,
     onRestoreDatabase: () -> Unit,
@@ -506,6 +509,7 @@ private fun CoverageMapRoute(
         onDisablePassiveTracking = {
             scope.launch { PassiveTrackingManager.disable(context) }
         },
+        onOpenSettings = onOpenSettings,
         onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
         onBackupDatabase = onBackupDatabase,
         onRestoreDatabase = onRestoreDatabase,
@@ -700,6 +704,7 @@ internal fun CoverageMapContent(
     onCenterCurrentLocation: () -> Unit,
     onEnablePassiveTracking: () -> Unit = {},
     onDisablePassiveTracking: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     onOpenTrackingDiagnostics: () -> Unit = {},
     onBackupDatabase: () -> Unit = {},
     onRestoreDatabase: () -> Unit = {},
@@ -757,6 +762,7 @@ internal fun CoverageMapContent(
                 isPassiveTrackingEnabled = isPassiveTrackingEnabled,
                 onEnablePassiveTracking = onEnablePassiveTracking,
                 onDisablePassiveTracking = onDisablePassiveTracking,
+                onOpenSettings = onOpenSettings,
                 onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
                 onBackupDatabase = onBackupDatabase,
                 onRestoreDatabase = onRestoreDatabase,
@@ -1046,6 +1052,7 @@ private fun CoverageMapTopAppBar(
     isPassiveTrackingEnabled: Boolean,
     onEnablePassiveTracking: () -> Unit,
     onDisablePassiveTracking: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenTrackingDiagnostics: () -> Unit,
     onBackupDatabase: () -> Unit,
     onRestoreDatabase: () -> Unit,
@@ -1142,7 +1149,10 @@ private fun CoverageMapTopAppBar(
                 )
                 DropdownMenuItem(
                     text = { Text("Settings") },
-                    onClick = { menuExpanded = false },
+                    onClick = {
+                        menuExpanded = false
+                        onOpenSettings()
+                    },
                 )
                 DropdownMenuItem(
                     text = { Text("Back up database") },

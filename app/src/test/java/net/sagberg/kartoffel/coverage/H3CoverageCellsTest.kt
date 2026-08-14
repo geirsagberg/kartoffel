@@ -6,7 +6,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class H3CoverageCellsTest {
-    private val coverageCells = H3CoverageCells(H3Core.newInstance())
+    private val h3 = H3Core.newInstance()
+    private val coverageCells = H3CoverageCells(h3)
 
     @Test
     fun mapsRepresentativeCoordinatesToStableCoverageCells() {
@@ -28,28 +29,62 @@ class H3CoverageCellsTest {
     }
 
     @Test
-    fun returnsEveryEquallyShortIntermediateCellForAOneCellGap() {
+    fun returnsOneShortestPathForAnEligibleGap() {
         val start = CoverageCellId(626169207098265599)
         val destination = CoverageCellId(626169207099809791)
 
-        assertEquals(
-            setOf(
+        val intermediateCells = coverageCells.intermediateCellsForGap(
+            start = start,
+            destination = destination,
+            maximumGapSteps = 3,
+        )
+
+        assertEquals(1, intermediateCells.size)
+        assertTrue(
+            intermediateCells.single() in setOf(
                 CoverageCellId(626169207099793407),
                 CoverageCellId(626169207098388479),
             ),
-            coverageCells.intermediateCellsForShortGap(start, destination),
         )
     }
 
     @Test
-    fun doesNotInterpolateAdjacentCellsOrLargerGaps() {
+    fun maximumGapIsInclusive() {
         val start = CoverageCellId(626169207098265599)
-        val adjacent = CoverageCellId(626169207098388479)
-        val fartherAway = coverageCells.cellAt(
-            GeoCoordinate(latitude = 59.915, longitude = 10.7522),
+        val destination = CoverageCellId(
+            h3.gridDisk(start.value, 3).first { h3.gridDistance(start.value, it) == 3L },
         )
 
-        assertEquals(emptySet<CoverageCellId>(), coverageCells.intermediateCellsForShortGap(start, adjacent))
-        assertEquals(emptySet<CoverageCellId>(), coverageCells.intermediateCellsForShortGap(start, fartherAway))
+        assertEquals(
+            emptySet<CoverageCellId>(),
+            coverageCells.intermediateCellsForGap(start, destination, maximumGapSteps = 2),
+        )
+        assertEquals(
+            2,
+            coverageCells.intermediateCellsForGap(start, destination, maximumGapSteps = 3).size,
+        )
+    }
+
+    @Test
+    fun doesNotInterpolateSameOrAdjacentCellsAndOneDisablesInterpolation() {
+        val start = CoverageCellId(626169207098265599)
+        val adjacent = CoverageCellId(626169207098388479)
+
+        assertEquals(
+            emptySet<CoverageCellId>(),
+            coverageCells.intermediateCellsForGap(start, start, maximumGapSteps = 3),
+        )
+        assertEquals(
+            emptySet<CoverageCellId>(),
+            coverageCells.intermediateCellsForGap(start, adjacent, maximumGapSteps = 3),
+        )
+        assertEquals(
+            emptySet<CoverageCellId>(),
+            coverageCells.intermediateCellsForGap(
+                start,
+                CoverageCellId(626169207099809791),
+                maximumGapSteps = 1,
+            ),
+        )
     }
 }

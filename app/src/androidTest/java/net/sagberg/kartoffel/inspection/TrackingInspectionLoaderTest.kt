@@ -120,7 +120,7 @@ class TrackingInspectionLoaderTest {
     }
 
     @Test
-    fun sessionInferenceUsesPredecessorBeforeCustomWindow() = runBlocking {
+    fun sessionInspectionDoesNotReconstructHistoricalInterpolation() = runBlocking {
         val recorder = RecordingSessionRecorder(database)
         val sessionId = recorder.start(1_000)
         recorder.record(
@@ -150,12 +150,11 @@ class TrackingInspectionLoaderTest {
         )
 
         assertEquals(1, snapshot.cells.count { it.state == DiagnosticCellState.Observed })
-        assertEquals(2, snapshot.cells.count { it.state == DiagnosticCellState.Inferred })
+        assertEquals(0, snapshot.cells.count { it.state == DiagnosticCellState.Inferred })
+        assertEquals(1, snapshot.cells.size)
         assertEquals(1, snapshot.cells.sumOf { it.samples.size })
-        assertTrue(
-            snapshot.cells.filter { it.state == DiagnosticCellState.Inferred }
-                .all { it.evidenceFirstMillis == 3_000L && it.evidenceLastMillis == 3_000L },
-        )
+        assertEquals(3_000L, snapshot.cells.single().evidenceFirstMillis)
+        assertEquals(3_000L, snapshot.cells.single().evidenceLastMillis)
     }
 
     @Test

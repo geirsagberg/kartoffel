@@ -16,7 +16,7 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 - **Street-Level Coverage:** visited streets, blocks, and similarly small areas.
 - **Coverage Cell:** the H3 area used as the durable unit of visited coverage.
 - **Coverage Compaction:** representing a complete set of fine Coverage Cells by their H3 parent without changing the logical Street-Level Coverage.
-- **False Coverage:** a cell marked visited without credible evidence that the user passed nearby.
+- **False Coverage:** a cell marked visited without credible evidence that the user passed through it or along a plausible nearby route. Small ambiguity around a credible route is not False Coverage.
 - **Good Enough History:** useful passive history without requiring perfect capture.
 - **Barely Noticeable Battery Use:** passive capture that does not create obvious battery anxiety in normal use.
 - **Coverage Evidence:** retained information explaining why a cell is considered visited.
@@ -25,7 +25,9 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 - **Manual Route Claim:** the user's deliberate retrospective claim that they travelled approximately along a user-authored route, without asserting when. Each confirmation remains distinct so it can be withdrawn without removing other Coverage Evidence.
 - **Manual Coverage Evidence:** Coverage Evidence created by a Manual Route Claim.
 - **Accuracy-Gated Clearing:** rejecting evidence that is too inaccurate to clear fog safely.
-- **Conservative Interpolation:** filling short, plausible gaps between samples. When several equally short local routes are credible, all may be filled.
+- **Maximum Accepted Accuracy:** the largest reported horizontal-accuracy radius a Location Sample may have to create Coverage Evidence. It applies to both Passive Tracking and Recording Sessions.
+- **Conservative Interpolation:** filling a short, plausible gap between accepted Location Samples along one shortest path of Coverage Cells.
+- **Maximum Interpolation Gap:** the greatest H3 grid distance eligible for Conservative Interpolation. It applies to both Passive Tracking and Recording Sessions; a value of one disables interpolation.
 - **Passive Gap:** a visited place left covered because passive evidence was insufficient.
 - **Tracking Mode:** the current coverage-capture policy: Off, Passive, or Recording Session. Only one mode operates at a time; a Recording Session temporarily overrides Passive Tracking and stopping it returns to Passive when the durable opt-in remains enabled, otherwise Off.
 - **Passive Tracking:** durable, best-effort opt-in capture that remains enabled until explicitly disabled, does not require starting a Recording Session, and may leave Passive Gaps when Android limits background delivery.

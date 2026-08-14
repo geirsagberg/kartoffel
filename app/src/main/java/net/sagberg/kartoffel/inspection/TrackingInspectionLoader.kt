@@ -81,21 +81,7 @@ internal class TrackingInspectionLoader(
                         point.capturedAtMillis >= startMillis && point.capturedAtMillis < endMillis
                     }.forEach { point ->
                         aggregates.getOrPut(point.cellId) { MutableDiagnosticCell(point.cellId) }
-                            .addSessionEvidence(point.capturedAtMillis, inferred = false)
-                    }
-                    sessionPoints.zipWithNext()
-                        .filter { (_, destination) ->
-                            destination.capturedAtMillis >= startMillis &&
-                                destination.capturedAtMillis < endMillis
-                        }
-                        .forEach { (start, destination) ->
-                        h3.intermediateCellsForShortGap(
-                            CoverageCellId(start.cellId),
-                            CoverageCellId(destination.cellId),
-                        ).forEach { inferred ->
-                            aggregates.getOrPut(inferred.value) { MutableDiagnosticCell(inferred.value) }
-                                .addSessionEvidence(destination.capturedAtMillis, inferred = true)
-                        }
+                            .addSessionEvidence(point.capturedAtMillis)
                     }
                 }
                 else -> durableEvidence
@@ -155,8 +141,8 @@ internal class TrackingInspectionLoader(
         var firstEvidenceMillis: Long? = null
         var lastEvidenceMillis: Long? = null
 
-        fun addSessionEvidence(capturedAtMillis: Long, inferred: Boolean) {
-            if (inferred) recordingInferred = true else recordingObserved = true
+        fun addSessionEvidence(capturedAtMillis: Long) {
+            recordingObserved = true
             firstEvidenceMillis = minOf(firstEvidenceMillis ?: Long.MAX_VALUE, capturedAtMillis)
             lastEvidenceMillis = maxOf(lastEvidenceMillis ?: Long.MIN_VALUE, capturedAtMillis)
         }

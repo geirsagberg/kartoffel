@@ -10,8 +10,8 @@ import net.sagberg.kartoffel.storage.CoverageEvidenceSource
 import net.sagberg.kartoffel.storage.KartoffelDatabase
 import net.sagberg.kartoffel.storage.PersistedActivityMode
 import net.sagberg.kartoffel.storage.RecordingSessionEntity
+import net.sagberg.kartoffel.storage.RoomCoverageSettings
 
-internal const val MAX_RECORDING_ACCURACY_METERS = 20.0
 internal const val RECORDING_ACCURACY_REJECTION = "accuracy_exceeds_recording_limit"
 
 private const val ACTIVE_SESSION_TRIGGER = "active_session"
@@ -24,6 +24,7 @@ internal class RecordingSessionRecorder(
     coverageCells: H3CoverageCells = H3CoverageCells(),
 ) : RecordingSessionGateway {
     private val evidenceRecorder = CoverageEvidenceRecorder(database, coverageCells)
+    private val coverageSettings = RoomCoverageSettings(database.coverageSettings())
 
     override suspend fun activeSessionId(): Long? =
         database.recordingSessions().observeActive().first()?.id
@@ -42,12 +43,14 @@ internal class RecordingSessionRecorder(
             "Recording Session $sessionId does not exist"
         }
         check(session.endedAtMillis == null) { "Recording Session $sessionId has ended" }
+        val settings = coverageSettings.current()
         return evidenceRecorder.record(
             fix = fix,
             rules = CoverageEvidenceRules(
                 source = CoverageEvidenceSource.RECORDING_SESSION,
                 trigger = ACTIVE_SESSION_TRIGGER,
-                maximumAccuracyMeters = MAX_RECORDING_ACCURACY_METERS,
+                maximumAccuracyMeters = settings.maximumAcceptedAccuracyMeters.toDouble(),
+                maximumInterpolationGapSteps = settings.maximumInterpolationGapSteps,
                 accuracyRejectionReason = RECORDING_ACCURACY_REJECTION,
             ),
             recordingSessionId = sessionId,

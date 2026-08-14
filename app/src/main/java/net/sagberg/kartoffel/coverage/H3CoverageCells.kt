@@ -36,20 +36,22 @@ internal class H3CoverageCells(
         boundary = boundaryOf(cell),
     )
 
-    fun intermediateCellsForShortGap(
+    fun intermediateCellsForGap(
         start: CoverageCellId,
         destination: CoverageCellId,
-    ): Set<CoverageCellId> =
-        runCatching {
-            if (h3.gridDistance(start.value, destination.value) != 2L) {
+        maximumGapSteps: Int,
+    ): Set<CoverageCellId> {
+        require(maximumGapSteps > 0)
+        return runCatching {
+            val distance = h3.gridDistance(start.value, destination.value)
+            if (distance !in 2L..maximumGapSteps.toLong()) {
                 return@runCatching emptySet()
             }
 
-            val destinationNeighbors = h3.gridDisk(destination.value, 1).toSet()
-            h3.gridDisk(start.value, 1)
-                .asSequence()
-                .filter(destinationNeighbors::contains)
-                .map(::CoverageCellId)
-                .toSet()
+            h3.gridPathCells(start.value, destination.value)
+                .drop(1)
+                .dropLast(1)
+                .mapTo(linkedSetOf(), ::CoverageCellId)
         }.getOrDefault(emptySet())
+    }
 }

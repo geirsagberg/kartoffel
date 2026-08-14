@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
+import net.sagberg.kartoffel.settings.CoverageSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -118,6 +119,28 @@ class KartoffelDatabaseTest {
         preferences.disable()
 
         assertEquals(false, preferences.observe().first().enabled)
+    }
+
+    @Test
+    fun coverageSettingsDefaultUpdateAndReset() = runBlocking {
+        val settings = RoomCoverageSettings(database.coverageSettings())
+
+        assertEquals(CoverageSettings.Default, settings.observe().first())
+
+        settings.setMaximumAcceptedAccuracyMeters(40)
+        settings.setMaximumInterpolationGapSteps(7)
+
+        assertEquals(
+            CoverageSettings(
+                maximumAcceptedAccuracyMeters = 40,
+                maximumInterpolationGapSteps = 7,
+            ),
+            settings.current(),
+        )
+
+        settings.reset()
+
+        assertEquals(CoverageSettings.Default, settings.current())
     }
 
     private fun sample(

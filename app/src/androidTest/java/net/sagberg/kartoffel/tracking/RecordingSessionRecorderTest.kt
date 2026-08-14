@@ -12,6 +12,7 @@ import net.sagberg.kartoffel.coverage.H3CoverageCells
 import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
 import net.sagberg.kartoffel.storage.CoverageEvidenceSource
 import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.storage.RoomCoverageSettings
 import net.sagberg.kartoffel.storage.evidenceMaskOf
 import net.sagberg.kartoffel.storage.inferredEvidenceMaskOf
 import org.junit.After
@@ -96,7 +97,7 @@ class RecordingSessionRecorderTest {
             RecordingLocationFix(
                 coordinate = GeoCoordinate(latitude = 59.9109, longitude = 10.7522),
                 capturedAtMillis = 2_000,
-                accuracyMeters = MAX_RECORDING_ACCURACY_METERS + 1.0,
+                accuracyMeters = 26.0,
             ),
         )
 
@@ -106,6 +107,25 @@ class RecordingSessionRecorderTest {
         assertEquals(RECORDING_ACCURACY_REJECTION, sample.rejectionReason)
         assertEquals(emptyList<Any>(), database.recordingSessionPoints().forSession(sessionId))
         assertEquals(emptyList<Any>(), database.coverageCells().all())
+    }
+
+    @Test
+    fun changedAccuracySettingAppliesToTheNextRecordingFix() = runBlocking {
+        val settings = RoomCoverageSettings(database.coverageSettings())
+        val sessionId = recorder.start(startedAtMillis = 1_000)
+        val fix = RecordingLocationFix(
+            coordinate = GeoCoordinate(latitude = 59.9109, longitude = 10.7522),
+            capturedAtMillis = 2_000,
+            accuracyMeters = 21.0,
+        )
+
+        settings.setMaximumAcceptedAccuracyMeters(20)
+        val rejected = recorder.record(sessionId, fix)
+        settings.setMaximumAcceptedAccuracyMeters(25)
+        val accepted = recorder.record(sessionId, fix.copy(capturedAtMillis = 3_000))
+
+        assertEquals(false, rejected.accepted)
+        assertEquals(true, accepted.accepted)
     }
 
     @Test
@@ -135,11 +155,13 @@ class RecordingSessionRecorderTest {
     }
 
     @Test
-    fun oneCellGapClearsEveryEquallyShortRouteWithoutSyntheticEvidence() = runBlocking {
+    fun changedInterpolationSettingAppliesToTheNextRecordingFix() = runBlocking {
+        val settings = RoomCoverageSettings(database.coverageSettings())
         val sessionId = recorder.start(startedAtMillis = 1_000)
         val start = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
         val destination = GeoCoordinate(latitude = 59.910527, longitude = 10.751046)
 
+        settings.setMaximumInterpolationGapSteps(1)
         recorder.record(
             sessionId,
             RecordingLocationFix(start, capturedAtMillis = 2_000, accuracyMeters = 8.0),
@@ -148,17 +170,16 @@ class RecordingSessionRecorderTest {
             sessionId,
             RecordingLocationFix(destination, capturedAtMillis = 3_000, accuracyMeters = 8.0),
         )
+        assertEquals(2, database.coverageCells().all().size)
+
+        settings.setMaximumInterpolationGapSteps(3)
+        recorder.record(
+            sessionId,
+            RecordingLocationFix(start, capturedAtMillis = 4_000, accuracyMeters = 8.0),
+        )
 
         val cells = database.coverageCells().all()
-        assertEquals(
-            setOf(
-                626169207098265599,
-                626169207099809791,
-                626169207099793407,
-                626169207098388479,
-            ),
-            cells.map { it.cellId }.toSet(),
-        )
+        assertEquals(3, cells.size)
         assertTrue(
             cells.filter { it.cellId in setOf(626169207098265599, 626169207099809791) }
                 .all {
@@ -167,20 +188,16 @@ class RecordingSessionRecorderTest {
                     )
                 },
         )
-        assertTrue(
-            cells.filter { it.cellId in setOf(626169207099793407, 626169207098388479) }
-                .all {
-                    it.evidenceMask == inferredEvidenceMaskOf(
-                        CoverageEvidenceSource.RECORDING_SESSION,
-                    )
-                },
+        val inferredCell = cells.single {
+            it.cellId !in setOf(626169207098265599, 626169207099809791)
+        }
+        assertEquals(
+            inferredEvidenceMaskOf(CoverageEvidenceSource.RECORDING_SESSION),
+            inferredCell.evidenceMask,
         )
-        assertTrue(
-            cells.filter { it.cellId in setOf(626169207099793407, 626169207098388479) }
-                .all { it.firstSeenAtMillis == 3_000L && it.lastSeenAtMillis == 3_000L },
-        )
-        assertEquals(2, database.locationSamples().between(0, 4_000).size)
-        assertEquals(2, database.recordingSessionPoints().forSession(sessionId).size)
+        assertEquals(4_000L, inferredCell.firstSeenAtMillis)
+        assertEquals(3, database.locationSamples().between(0, 5_000).size)
+        assertEquals(3, database.recordingSessionPoints().forSession(sessionId).size)
     }
 
     @Test
@@ -198,7 +215,7 @@ class RecordingSessionRecorderTest {
             RecordingLocationFix(
                 destination,
                 capturedAtMillis = 3_000,
-                accuracyMeters = MAX_RECORDING_ACCURACY_METERS + 1.0,
+                accuracyMeters = 26.0,
             ),
         )
 

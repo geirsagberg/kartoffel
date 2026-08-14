@@ -106,12 +106,14 @@ class CoverageMapContentTest {
 
     @Test
     fun secondaryActionsAreAvailableFromTheOverflowMenu() {
+        var settingsOpened = false
         var diagnosticsOpened = false
         var inspectionOpened = false
         var backupOpened = false
         var restoreOpened = false
         compose.setCoverageMapContent(
             hasLocationPermission = true,
+            onOpenSettings = { settingsOpened = true },
             onOpenTrackingDiagnostics = { diagnosticsOpened = true },
             onEnterTrackingInspection = { inspectionOpened = true },
             onBackupDatabase = { backupOpened = true },
@@ -127,6 +129,9 @@ class CoverageMapContentTest {
         compose.onNodeWithText("Enable Passive Tracking").assertIsDisplayed()
         compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
         compose.onNodeWithText("Draw route").assertIsDisplayed()
+        compose.onNodeWithText("Settings").performClick()
+        compose.runOnIdle { assertEquals(true, settingsOpened) }
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Tracking inspection").performClick()
         compose.runOnIdle { assertEquals(true, inspectionOpened) }
         compose.onNodeWithContentDescription("More options").performClick()
@@ -623,6 +628,7 @@ class CoverageMapContentTest {
         hasLocationPermission: Boolean,
         isRecordingSession: Boolean = false,
         isPassiveTrackingEnabled: Boolean = false,
+        onOpenSettings: () -> Unit = {},
         onOpenTrackingDiagnostics: () -> Unit = {},
         onBackupDatabase: () -> Unit = {},
         onRestoreDatabase: () -> Unit = {},
@@ -642,6 +648,7 @@ class CoverageMapContentTest {
                     onStartRecordingSession = {},
                     onStopRecordingSession = {},
                     onCenterCurrentLocation = {},
+                    onOpenSettings = onOpenSettings,
                     onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
                     onBackupDatabase = onBackupDatabase,
                     onRestoreDatabase = onRestoreDatabase,
