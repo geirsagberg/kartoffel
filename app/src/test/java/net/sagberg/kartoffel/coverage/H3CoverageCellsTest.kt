@@ -14,8 +14,8 @@ class H3CoverageCellsTest {
         val osloCentralStation = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
         val statueOfLiberty = GeoCoordinate(latitude = 40.689167, longitude = -74.044444)
 
-        assertEquals(626169207098265599, coverageCells.cellAt(osloCentralStation).value)
-        assertEquals(626740350322065407, coverageCells.cellAt(statueOfLiberty).value)
+        assertEquals(621665607470907391, coverageCells.cellAt(osloCentralStation).value)
+        assertEquals(622236750694711295, coverageCells.cellAt(statueOfLiberty).value)
     }
 
     @Test
@@ -30,8 +30,10 @@ class H3CoverageCellsTest {
 
     @Test
     fun returnsOneShortestPathForAnEligibleGap() {
-        val start = CoverageCellId(626169207098265599)
-        val destination = CoverageCellId(626169207099809791)
+        val start = coverageCells.cellAt(GeoCoordinate(59.9109, 10.7522))
+        val destination = CoverageCellId(
+            h3.gridDisk(start.value, 2).first { h3.gridDistance(start.value, it) == 2L },
+        )
 
         val intermediateCells = coverageCells.intermediateCellsForGap(
             start = start,
@@ -40,17 +42,18 @@ class H3CoverageCellsTest {
         )
 
         assertEquals(1, intermediateCells.size)
-        assertTrue(
-            intermediateCells.single() in setOf(
-                CoverageCellId(626169207099793407),
-                CoverageCellId(626169207098388479),
-            ),
+        assertEquals(
+            h3.gridPathCells(start.value, destination.value)
+                .drop(1)
+                .dropLast(1)
+                .mapTo(linkedSetOf(), ::CoverageCellId),
+            intermediateCells,
         )
     }
 
     @Test
     fun maximumGapIsInclusive() {
-        val start = CoverageCellId(626169207098265599)
+        val start = coverageCells.cellAt(GeoCoordinate(59.9109, 10.7522))
         val destination = CoverageCellId(
             h3.gridDisk(start.value, 3).first { h3.gridDistance(start.value, it) == 3L },
         )
@@ -67,8 +70,11 @@ class H3CoverageCellsTest {
 
     @Test
     fun doesNotInterpolateSameOrAdjacentCellsAndOneDisablesInterpolation() {
-        val start = CoverageCellId(626169207098265599)
-        val adjacent = CoverageCellId(626169207098388479)
+        val start = coverageCells.cellAt(GeoCoordinate(59.9109, 10.7522))
+        val adjacent = CoverageCellId(h3.gridDisk(start.value, 1).first { it != start.value })
+        val twoStepsAway = CoverageCellId(
+            h3.gridDisk(start.value, 2).first { h3.gridDistance(start.value, it) == 2L },
+        )
 
         assertEquals(
             emptySet<CoverageCellId>(),
@@ -82,7 +88,7 @@ class H3CoverageCellsTest {
             emptySet<CoverageCellId>(),
             coverageCells.intermediateCellsForGap(
                 start,
-                CoverageCellId(626169207099809791),
+                twoStepsAway,
                 maximumGapSteps = 1,
             ),
         )

@@ -17,11 +17,11 @@ Permissions are requested in context: foreground location for map/session use, a
 ### Coverage
 
 - H3 Coverage Cells are the durable truth; rendered fog tiles are disposable.
-- Coverage Compaction may store complete H3 child sets as their parent, while preserving the same logical resolution-11 coverage.
-- The stored set is canonical: no cell is stored alongside one of its ancestors, complete child sets compact recursively, and geometric rendering expands compacted cells to resolution 11.
+- Coverage Compaction may store complete H3 child sets as their parent, while preserving the same logical resolution-10 coverage.
+- The stored set is canonical: no cell is stored alongside one of its ancestors, complete child sets compact recursively, and geometric rendering expands compacted cells to resolution 10.
 - Accuracy-Gated Clearing prefers Passive Gaps over clearly implausible coverage.
 - Conservative Interpolation fills one shortest H3 path between consecutive accepted samples when their grid distance is at least two and no greater than the Maximum Interpolation Gap. Same-cell and adjacent samples add no inferred coverage, broader gaps remain Passive Gaps, and H3 traversal failures add no inferred coverage.
-- H3 resolution is provisional until Android rendering is tested.
+- Coverage Cells use H3 resolution 10.
 
 ### Capture
 
@@ -80,7 +80,7 @@ Automate behavior at stable seams:
 - source-specific clearing behavior;
 - retention without coverage loss;
 - fog tile output for known cells;
-- Coverage Compaction round-trips to the same resolution-11 Coverage Cells and renders the same cleared area;
+- Coverage Compaction round-trips to the same resolution-10 Coverage Cells and renders the same cleared area;
 - Room persistence and migrations;
 - Settings navigation, editing, reset, and application to the next Passive or Recording Session fix;
 - tracking orchestration behind Android API wrappers.

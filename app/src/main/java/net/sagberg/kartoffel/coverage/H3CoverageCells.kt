@@ -2,11 +2,7 @@ package net.sagberg.kartoffel.coverage
 
 import com.uber.h3core.H3Core
 
-/**
- * Provisional for MVP. Changing this value invalidates persisted Coverage Cell IDs and may
- * require clearing local coverage data until a migration strategy is explicitly introduced.
- */
-internal const val COVERAGE_CELL_RESOLUTION = 11
+internal const val COVERAGE_CELL_RESOLUTION = 10
 
 @JvmInline
 internal value class CoverageCellId(val value: Long)

@@ -36,6 +36,7 @@ class KartoffelDatabaseMigrationTest {
                 MIGRATION_4_5,
                 MIGRATION_5_6,
                 MIGRATION_6_7,
+                MIGRATION_7_8,
             )
             .allowMainThreadQueries()
             .build()
@@ -45,7 +46,15 @@ class KartoffelDatabaseMigrationTest {
             assertEquals(7L, sample?.recordingSessionId)
             assertNotNull(database.recordingSessions().find(7))
             assertEquals(11L, database.recordingSessionPoints().forSession(7).single().sampleId)
-            assertEquals(1, database.coverageCells().find(123)?.evidenceMask)
+            val mergedCoverage = database.coverageCells().all().single()
+            assertEquals(621665607470907391L, mergedCoverage.cellId)
+            assertEquals(500L, mergedCoverage.firstSeenAtMillis)
+            assertEquals(3000L, mergedCoverage.lastSeenAtMillis)
+            assertEquals(3, mergedCoverage.evidenceMask)
+            assertEquals(
+                621665607470907391L,
+                database.recordingSessionPoints().forSession(7).single().cellId,
+            )
             assertEquals(false, PassiveTrackingPreferences(database.trackingSettings()).current().enabled)
             assertEquals(
                 CoverageSettings.Default,
@@ -107,7 +116,8 @@ class KartoffelDatabaseMigrationTest {
             db.execSQL(
                 "INSERT INTO coverage_cells " +
                     "(cell_id, first_seen_at_ms, last_seen_at_ms, evidence_mask) " +
-                    "VALUES (123, 1000, 3000, 1)",
+                    "VALUES (626169207098265599, 1000, 3000, 1), " +
+                    "(626169207098261503, 500, 2000, 2)",
             )
             db.execSQL(
                 "INSERT INTO location_samples " +
@@ -119,7 +129,7 @@ class KartoffelDatabaseMigrationTest {
             db.execSQL(
                 "INSERT INTO recording_session_points " +
                     "(sample_id, recording_session_id, captured_at_ms, cell_id, latitude, longitude) " +
-                    "VALUES (11, 7, 2000, 123, 59.91, 10.75)",
+                    "VALUES (11, 7, 2000, 626169207098265599, 59.91, 10.75)",
             )
         }
     }
