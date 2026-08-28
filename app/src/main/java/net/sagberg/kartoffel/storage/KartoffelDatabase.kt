@@ -87,9 +87,12 @@ internal val MIGRATION_6_7 = Migration(6, 7) { connection ->
 internal val MIGRATION_7_8 = Migration(7, 8) { connection ->
     val resolutionMask = 15L shl 52
     val resolutionTen = 10L shl 52
+    val resolutionEleven = 11L shl 52
     val unusedChildDigit = 7L shl 12
     val parentExpression =
-        "((cell_id & ${resolutionMask.inv()}) | $resolutionTen | $unusedChildDigit)"
+        "CASE WHEN (cell_id & $resolutionMask) = $resolutionEleven " +
+            "THEN ((cell_id & ${resolutionMask.inv()}) | $resolutionTen | $unusedChildDigit) " +
+            "ELSE cell_id END"
 
     connection.execSQL(
         """

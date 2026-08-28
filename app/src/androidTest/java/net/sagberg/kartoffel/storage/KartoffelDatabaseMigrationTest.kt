@@ -45,15 +45,28 @@ class KartoffelDatabaseMigrationTest {
             assertEquals("unknown", sample?.activityMode)
             assertEquals(7L, sample?.recordingSessionId)
             assertNotNull(database.recordingSessions().find(7))
-            assertEquals(11L, database.recordingSessionPoints().forSession(7).single().sampleId)
-            val mergedCoverage = database.coverageCells().all().single()
+            assertEquals(
+                listOf(11L, 12L),
+                database.recordingSessionPoints().forSession(7).map { it.sampleId },
+            )
+            val coverage = database.coverageCells().all().associateBy { it.cellId }
+            val mergedCoverage = coverage.getValue(621665607470907391L)
             assertEquals(621665607470907391L, mergedCoverage.cellId)
             assertEquals(500L, mergedCoverage.firstSeenAtMillis)
             assertEquals(3000L, mergedCoverage.lastSeenAtMillis)
             assertEquals(3, mergedCoverage.evidenceMask)
             assertEquals(
-                621665607470907391L,
-                database.recordingSessionPoints().forSession(7).single().cellId,
+                CoverageCellEntity(
+                    cellId = 617162007843700735L,
+                    firstSeenAtMillis = 400L,
+                    lastSeenAtMillis = 4000L,
+                    evidenceMask = 1,
+                ),
+                coverage[617162007843700735L],
+            )
+            assertEquals(
+                listOf(621665607470907391L, 617162007843700735L),
+                database.recordingSessionPoints().forSession(7).map { it.cellId },
             )
             assertEquals(false, PassiveTrackingPreferences(database.trackingSettings()).current().enabled)
             assertEquals(
@@ -117,19 +130,23 @@ class KartoffelDatabaseMigrationTest {
                 "INSERT INTO coverage_cells " +
                     "(cell_id, first_seen_at_ms, last_seen_at_ms, evidence_mask) " +
                     "VALUES (626169207098265599, 1000, 3000, 1), " +
-                    "(626169207098261503, 500, 2000, 2)",
+                    "(626169207098261503, 500, 2000, 2), " +
+                    "(617162007843700735, 400, 4000, 1)",
             )
             db.execSQL(
                 "INSERT INTO location_samples " +
                     "(id, captured_at_ms, latitude, longitude, accuracy_meters, source, " +
                     "trigger, accepted, rejection_reason, recording_session_id) " +
                     "VALUES (11, 2000, 59.91, 10.75, 8.0, 'recording_session', " +
+                    "'active_session', 1, NULL, 7), " +
+                    "(12, 2500, 59.91, 10.75, 8.0, 'recording_session', " +
                     "'active_session', 1, NULL, 7)",
             )
             db.execSQL(
                 "INSERT INTO recording_session_points " +
                     "(sample_id, recording_session_id, captured_at_ms, cell_id, latitude, longitude) " +
-                    "VALUES (11, 7, 2000, 626169207098265599, 59.91, 10.75)",
+                    "VALUES (11, 7, 2000, 626169207098265599, 59.91, 10.75), " +
+                    "(12, 7, 2500, 617162007843700735, 59.91, 10.75)",
             )
         }
     }
