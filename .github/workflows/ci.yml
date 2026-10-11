@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check brand colours
+        run: bash scripts/check-brand-colors.sh
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-37' 'build-tools;37.0.0'
+      - name: Test, lint and build
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
