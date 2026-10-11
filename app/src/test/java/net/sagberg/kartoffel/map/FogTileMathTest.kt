@@ -30,6 +30,20 @@ class FogTileMathTest {
     }
 
     @Test
+    fun paddedTileBoundsReachIntoNeighbouringTilesByThePaddingInPixels() {
+        val tile = FogTileCoordinate(x = 17362, y = 9531, zoom = 15)
+
+        val padded = tile.latLngBounds(paddingPixels = FOG_TILE_SIZE.toDouble())
+
+        val northWest = FogTileCoordinate(x = tile.x - 1, y = tile.y - 1, zoom = 15).latLngBounds()
+        val southEast = FogTileCoordinate(x = tile.x + 1, y = tile.y + 1, zoom = 15).latLngBounds()
+        assertEquals(northWest.north, padded.north, 1e-9)
+        assertEquals(northWest.west, padded.west, 1e-9)
+        assertEquals(southEast.south, padded.south, 1e-9)
+        assertEquals(southEast.east, padded.east, 1e-9)
+    }
+
+    @Test
     fun seedSnapshotFiltersCoverageCellsToTheRequestedTileBounds() {
         val oslo = GeoCoordinate(latitude = 59.9139, longitude = 10.7522)
         val tileBounds = fogTileForCoordinate(oslo, zoom = 15).latLngBounds()
