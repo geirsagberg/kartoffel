@@ -5,7 +5,7 @@ import net.sagberg.kartoffel.storage.CoverageEvidenceSource
 import net.sagberg.kartoffel.storage.KartoffelDatabase
 import net.sagberg.kartoffel.storage.LocationSampleEntity
 import net.sagberg.kartoffel.storage.PersistedActivityMode
-import net.sagberg.kartoffel.storage.RecordingSessionPointEntity
+import net.sagberg.kartoffel.storage.RecordingPointEntity
 import net.sagberg.kartoffel.storage.evidenceMaskOf
 import net.sagberg.kartoffel.storage.inferredEvidenceMaskOf
 
@@ -26,7 +26,7 @@ internal data class CoverageEvidenceRules(
     val source: CoverageEvidenceSource,
     val trigger: String?,
     val maximumAccuracyMeters: Double,
-    val maximumInterpolationGapSteps: Int,
+    val maximumInterpolationDistanceSteps: Int,
     val accuracyRejectionReason: String,
     val shortGapInterpolation: ShortGapInterpolationPolicy? = null,
 )
@@ -57,7 +57,7 @@ internal class CoverageEvidenceRecorder(
     suspend fun record(
         fix: CoverageLocationFix,
         rules: CoverageEvidenceRules,
-        recordingSessionId: Long? = null,
+        recordingId: Long? = null,
         activityMode: PersistedActivityMode = PersistedActivityMode.UNKNOWN,
     ): CoverageLocationDecision {
         val decision = if (fix.accuracyMeters <= rules.maximumAccuracyMeters) {
@@ -71,8 +71,8 @@ internal class CoverageEvidenceRecorder(
         val cell = if (decision.accepted) coverageCells.cellAt(fix.coordinate) else null
 
         database.withWriteTransaction {
-            val previousPassiveSample = if (
-                recordingSessionId == null &&
+            val previousAutomaticSample = if (
+                recordingId == null &&
                 decision.accepted &&
                 rules.shortGapInterpolation != null
             ) {
@@ -93,19 +93,19 @@ internal class CoverageEvidenceRecorder(
                 trigger = rules.trigger,
                 accepted = decision.accepted,
                 rejectionReason = decision.rejectionReason,
-                recordingSessionId = recordingSessionId,
+                recordingId = recordingId,
                 activityMode = activityMode.persistedName,
             )
             val sampleId = database.locationSamples().insert(sample)
             cell?.let { acceptedCell ->
-                if (recordingSessionId != null) {
-                    val previousPoint = database.recordingSessionPoints()
-                        .lastForSession(recordingSessionId)
+                if (recordingId != null) {
+                    val previousPoint = database.recordingPoints()
+                        .lastForRecording(recordingId)
                     previousPoint?.let { observedPoint ->
                         coverageCells.intermediateCellsForGap(
                             start = CoverageCellId(observedPoint.cellId),
                             destination = acceptedCell,
-                            maximumGapSteps = rules.maximumInterpolationGapSteps,
+                            maximumGapSteps = rules.maximumInterpolationDistanceSteps,
                         ).forEach { inferredCell ->
                             database.coverageCells().upsert(
                                 cellId = inferredCell.value,
@@ -116,27 +116,27 @@ internal class CoverageEvidenceRecorder(
                         }
                     }
                     if (previousPoint?.cellId != acceptedCell.value) {
-                        database.recordingSessionPoints().insert(
-                            RecordingSessionPointEntity.fromAcceptedSample(
+                        database.recordingPoints().insert(
+                            RecordingPointEntity.fromAcceptedSample(
                                 sample = sample.copy(id = sampleId),
                                 cellId = acceptedCell.value,
                             ),
                         )
                     }
                 } else if (
-                    previousPassiveSample != null &&
-                    fix.capturedAtMillis - previousPassiveSample.capturedAtMillis <=
+                    previousAutomaticSample != null &&
+                    fix.capturedAtMillis - previousAutomaticSample.capturedAtMillis <=
                     checkNotNull(rules.shortGapInterpolation).maximumGapMillis
                 ) {
                     coverageCells.intermediateCellsForGap(
                         start = coverageCells.cellAt(
                             GeoCoordinate(
-                                latitude = previousPassiveSample.latitude,
-                                longitude = previousPassiveSample.longitude,
+                                latitude = previousAutomaticSample.latitude,
+                                longitude = previousAutomaticSample.longitude,
                             ),
                         ),
                         destination = acceptedCell,
-                        maximumGapSteps = rules.maximumInterpolationGapSteps,
+                        maximumGapSteps = rules.maximumInterpolationDistanceSteps,
                     ).forEach { inferredCell ->
                         database.coverageCells().upsert(
                             cellId = inferredCell.value,

@@ -34,10 +34,10 @@ internal fun TrackingDiagnosticsRoute(onBack: () -> Unit) {
     val context = LocalContext.current
     val database = remember(context) { KartoffelDatabase.open(context) }
     var loading by remember { mutableStateOf(true) }
-    var history by remember { mutableStateOf<RecordingSessionHistory?>(null) }
+    var history by remember { mutableStateOf<RecordingHistory?>(null) }
 
     LaunchedEffect(database) {
-        val loader = RecordingSessionHistoryLoader(database)
+        val loader = RecordingHistoryLoader(database)
         do {
             history = loader.load(System.currentTimeMillis())
             loading = false
@@ -51,7 +51,7 @@ internal fun TrackingDiagnosticsRoute(onBack: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TrackingDiagnosticsScreen(
-    history: RecordingSessionHistory?,
+    history: RecordingHistory?,
     loading: Boolean = false,
     onBack: () -> Unit,
 ) {
@@ -77,21 +77,21 @@ internal fun TrackingDiagnosticsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             when {
-                loading -> Text("Loading Recording Session…")
+                loading -> Text("Loading recording…")
                 history == null -> {
-                    Text("No Recording Sessions yet", style = MaterialTheme.typography.titleMedium)
-                    Text("Start recording from the map to see a session summary here.")
+                    Text("No recordings yet", style = MaterialTheme.typography.titleMedium)
+                    Text("Start recording from the map to see a summary here.")
                 }
-                else -> SessionHistory(history)
+                else -> RecordingSummary(history)
             }
         }
     }
 }
 
 @Composable
-private fun SessionHistory(history: RecordingSessionHistory) {
+private fun RecordingSummary(history: RecordingHistory) {
     Text(
-        if (history.isActive) "Active Recording Session" else "Latest Recording Session",
+        if (history.isActive) "Active recording" else "Latest recording",
         style = MaterialTheme.typography.titleMedium,
     )
     Text("Duration: ${history.durationMillis.displayDuration()}")

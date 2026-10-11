@@ -47,9 +47,9 @@ internal fun CoverageSettingsRoute(
                 repository.setMaximumAcceptedAccuracyMeters(value)
             }
         },
-        onMaximumInterpolationGapChangeFinished = { value ->
+        onMaximumInterpolationDistanceChangeFinished = { value ->
             persistenceScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                repository.setMaximumInterpolationGapSteps(value)
+                repository.setMaximumInterpolationDistanceSteps(value)
             }
         },
         onReset = {
@@ -64,15 +64,15 @@ internal fun CoverageSettingsRoute(
 internal fun CoverageSettingsScreen(
     settings: CoverageSettings,
     onMaximumAcceptedAccuracyChangeFinished: (Int) -> Unit,
-    onMaximumInterpolationGapChangeFinished: (Int) -> Unit,
+    onMaximumInterpolationDistanceChangeFinished: (Int) -> Unit,
     onReset: () -> Unit,
     onBack: () -> Unit,
 ) {
     var accuracyMeters by remember(settings.maximumAcceptedAccuracyMeters) {
         mutableFloatStateOf(settings.maximumAcceptedAccuracyMeters.toFloat())
     }
-    var interpolationSteps by remember(settings.maximumInterpolationGapSteps) {
-        mutableFloatStateOf(settings.maximumInterpolationGapSteps.toFloat())
+    var interpolationSteps by remember(settings.maximumInterpolationDistanceSteps) {
+        mutableFloatStateOf(settings.maximumInterpolationDistanceSteps.toFloat())
     }
 
     Scaffold(
@@ -111,7 +111,7 @@ internal fun CoverageSettingsScreen(
                 testTag = "maximum_accuracy_slider",
             )
             CoverageSettingSlider(
-                title = "Maximum interpolation gap",
+                title = "Maximum interpolation distance",
                 valueLabel = interpolationSteps.roundToInt().let { value ->
                     "$value ${if (value == 1) "step" else "steps"}"
                 },
@@ -120,12 +120,12 @@ internal fun CoverageSettingsScreen(
                 value = interpolationSteps,
                 onValueChange = { interpolationSteps = it },
                 onValueChangeFinished = {
-                    onMaximumInterpolationGapChangeFinished(interpolationSteps.roundToInt())
+                    onMaximumInterpolationDistanceChangeFinished(interpolationSteps.roundToInt())
                 },
                 valueRange = CoverageSettings.INTERPOLATION_GAP_RANGE.first.toFloat()..
                     CoverageSettings.INTERPOLATION_GAP_RANGE.last.toFloat(),
                 steps = 8,
-                testTag = "maximum_interpolation_gap_slider",
+                testTag = "maximum_interpolation_distance_slider",
             )
             TextButton(onClick = onReset) {
                 Text("Reset to defaults")

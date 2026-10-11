@@ -16,7 +16,7 @@ class TrackingDiagnosticsScreenTest {
     val compose = createComposeRule()
 
     @Test
-    fun noSessionIsPresentedAsANormalEmptyStateAndBackWorks() {
+    fun noRecordingIsPresentedAsANormalEmptyStateAndBackWorks() {
         var wentBack = false
         compose.setContent {
             MaterialTheme {
@@ -27,17 +27,17 @@ class TrackingDiagnosticsScreenTest {
             }
         }
 
-        compose.onNodeWithText("No Recording Sessions yet").assertIsDisplayed()
+        compose.onNodeWithText("No recordings yet").assertIsDisplayed()
         compose.onNodeWithTag("tracking_diagnostics_back").performClick()
         compose.runOnIdle { assertTrue(wentBack) }
     }
 
     @Test
-    fun sessionSummaryLabelsCountsAsFixesRatherThanTime() {
+    fun recordingSummaryLabelsCountsAsFixesRatherThanTime() {
         compose.setContent {
             MaterialTheme {
                 TrackingDiagnosticsScreen(
-                    history = RecordingSessionHistory(
+                    history = RecordingHistory(
                         isActive = true,
                         durationMillis = 125_000,
                         fixCounts = mapOf(
@@ -50,7 +50,7 @@ class TrackingDiagnosticsScreenTest {
             }
         }
 
-        compose.onNodeWithText("Active Recording Session").assertIsDisplayed()
+        compose.onNodeWithText("Active recording").assertIsDisplayed()
         compose.onNodeWithText("Duration: 2m 5s").assertIsDisplayed()
         compose.onNodeWithText("Fix counts by Activity Mode").assertIsDisplayed()
         compose.onNodeWithText("Walking").assertIsDisplayed()
@@ -59,11 +59,11 @@ class TrackingDiagnosticsScreenTest {
     }
 
     @Test
-    fun sessionWithNoFixesIsPresentedAsANormalEmptyState() {
+    fun recordingWithNoFixesIsPresentedAsANormalEmptyState() {
         compose.setContent {
             MaterialTheme {
                 TrackingDiagnosticsScreen(
-                    history = RecordingSessionHistory(
+                    history = RecordingHistory(
                         isActive = false,
                         durationMillis = 1_000,
                         fixCounts = emptyMap(),

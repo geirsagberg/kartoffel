@@ -10,7 +10,7 @@ import androidx.room3.PrimaryKey
     indices = [
         Index(value = ["captured_at_ms"]),
         Index(value = ["source", "captured_at_ms"]),
-        Index(value = ["recording_session_id", "captured_at_ms"]),
+        Index(value = ["recording_id", "captured_at_ms"]),
     ],
 )
 internal data class LocationSampleEntity(
@@ -27,8 +27,8 @@ internal data class LocationSampleEntity(
     val accepted: Boolean,
     @ColumnInfo(name = "rejection_reason")
     val rejectionReason: String?,
-    @ColumnInfo(name = "recording_session_id")
-    val recordingSessionId: Long? = null,
+    @ColumnInfo(name = "recording_id")
+    val recordingId: Long? = null,
     @ColumnInfo(name = "activity_mode", defaultValue = "'unknown'")
     val activityMode: String = PersistedActivityMode.UNKNOWN.persistedName,
 ) {

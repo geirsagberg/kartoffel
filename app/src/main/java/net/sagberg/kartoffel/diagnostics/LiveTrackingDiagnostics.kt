@@ -12,13 +12,13 @@ internal enum class LocationUpdateState {
 }
 
 internal enum class RequestedIntervalReason {
-    SESSION_START,
+    RECORDING_START,
     ACTIVITY_MODE,
     SPEED_OVERRIDE,
     SAFE_FALLBACK,
     SUSPENDED_WHILE_STILL,
-    PASSIVE_INITIAL,
-    PASSIVE_WINDOW,
+    AUTOMATIC_INITIAL,
+    AUTOMATIC_WINDOW,
     OPPORTUNISTIC,
 }
 
@@ -47,12 +47,12 @@ internal class LiveTrackingDiagnostics {
 
     val state: StateFlow<LiveTrackingDiagnosticsState> = mutableState.asStateFlow()
 
-    fun sessionStarted(intervalMillis: Long) {
+    fun recordingStarted(intervalMillis: Long) {
         mutableState.value = LiveTrackingDiagnosticsState(
             trackingActive = true,
             locationUpdateState = LocationUpdateState.ACTIVE,
             requestedLocationIntervalMillis = intervalMillis,
-            intervalReason = RequestedIntervalReason.SESSION_START,
+            intervalReason = RequestedIntervalReason.RECORDING_START,
         )
     }
 
@@ -101,11 +101,11 @@ internal class LiveTrackingDiagnostics {
         )
     }
 
-    fun sessionStopped() {
+    fun recordingStopped() {
         mutableState.value = LiveTrackingDiagnosticsState()
     }
 
-    fun passiveCaptureStarted(
+    fun automaticCaptureStarted(
         activityMode: RecordingActivity,
         intervalMillis: Long,
         reason: RequestedIntervalReason,
@@ -119,7 +119,7 @@ internal class LiveTrackingDiagnostics {
         )
     }
 
-    fun passiveWaiting(activityMode: RecordingActivity) {
+    fun automaticWaiting(activityMode: RecordingActivity) {
         mutableState.value = mutableState.value.copy(
             trackingActive = true,
             activityMode = activityMode,
@@ -133,7 +133,7 @@ internal class LiveTrackingDiagnostics {
         )
     }
 
-    fun passiveStopped() {
+    fun automaticStopped() {
         mutableState.value = LiveTrackingDiagnosticsState()
     }
 

@@ -72,58 +72,58 @@ class ProjectAcceptanceTest {
     }
 
     @Test
-    fun appLaunchesToGoogleBackedCoverageMapWithLocationPermissionWiring() {
+    fun appLaunchesToGoogleBackedMapWithLocationPermissionWiring() {
         val mainActivity = root
             .resolve("app/src/main/java/net/sagberg/kartoffel/MainActivity.kt")
             .readText()
-        val coverageMapScreen = root
-            .resolve("app/src/main/java/net/sagberg/kartoffel/map/CoverageMapScreen.kt")
+        val mapScreen = root
+            .resolve("app/src/main/java/net/sagberg/kartoffel/map/MapScreen.kt")
             .readText()
         val manifest = root.resolve("app/src/main/AndroidManifest.xml").readText()
 
         assertTrue(mainActivity.contains("KartoffelApp()"))
-        assertTrue(mainActivity.contains("CoverageMapScreen("))
+        assertTrue(mainActivity.contains("MapScreen("))
         assertTrue(mainActivity.contains("TrackingDiagnosticsRoute("))
-        assertTrue(coverageMapScreen.contains("GoogleMap("))
-        assertTrue(coverageMapScreen.contains("Modifier.fillMaxSize()"))
-        assertTrue(coverageMapScreen.contains("MapProperties("))
-        assertTrue(coverageMapScreen.contains("isMyLocationEnabled = hasLocationPermission"))
-        assertTrue(coverageMapScreen.contains("ActivityResultContracts.RequestPermission()"))
-        assertTrue(coverageMapScreen.contains("Manifest.permission.ACCESS_FINE_LOCATION"))
+        assertTrue(mapScreen.contains("GoogleMap("))
+        assertTrue(mapScreen.contains("Modifier.fillMaxSize()"))
+        assertTrue(mapScreen.contains("MapProperties("))
+        assertTrue(mapScreen.contains("isMyLocationEnabled = hasLocationPermission"))
+        assertTrue(mapScreen.contains("ActivityResultContracts.RequestPermission()"))
+        assertTrue(mapScreen.contains("Manifest.permission.ACCESS_FINE_LOCATION"))
         assertTrue(manifest.contains("android.permission.ACCESS_FINE_LOCATION"))
         assertTrue(manifest.contains("android.permission.ACCESS_BACKGROUND_LOCATION"))
         assertTrue(manifest.contains("android.permission.ACCESS_COARSE_LOCATION"))
     }
 
     @Test
-    fun recordingSessionsUseAnAndroidLocationForegroundService() {
+    fun recordingsUseAnAndroidLocationForegroundService() {
         val manifest = root.resolve("app/src/main/AndroidManifest.xml").readText()
         val service = root
             .resolve(
-                "app/src/main/java/net/sagberg/kartoffel/tracking/RecordingSessionService.kt",
+                "app/src/main/java/net/sagberg/kartoffel/tracking/RecordingService.kt",
             )
 
         assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE"))
         assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_LOCATION"))
         assertTrue(manifest.contains("android.permission.POST_NOTIFICATIONS"))
         assertTrue(manifest.contains("android:foregroundServiceType=\"location\""))
-        assertTrue(manifest.contains(".tracking.RecordingSessionService"))
+        assertTrue(manifest.contains(".tracking.RecordingService"))
         assertTrue(service.exists())
         assertTrue(service.readText().contains("return START_STICKY"))
     }
 
     @Test
-    fun passiveTrackingUsesStagedPermissionsAndRestorablePendingIntentWork() {
+    fun automaticTrackingUsesStagedPermissionsAndRestorablePendingIntentWork() {
         val mapScreen = root
-            .resolve("app/src/main/java/net/sagberg/kartoffel/map/CoverageMapScreen.kt")
+            .resolve("app/src/main/java/net/sagberg/kartoffel/map/MapScreen.kt")
             .readText()
         val actions = root
-            .resolve("app/src/main/java/net/sagberg/kartoffel/tracking/AndroidPassiveTrackingActions.kt")
+            .resolve("app/src/main/java/net/sagberg/kartoffel/tracking/AndroidAutomaticTrackingActions.kt")
             .readText()
         val manifest = root.resolve("app/src/main/AndroidManifest.xml").readText()
 
-        val foregroundStage = mapScreen.indexOf("passiveForegroundPermissionLauncher.launch")
-        val backgroundStage = mapScreen.indexOf("passiveBackgroundPermissionLauncher.launch")
+        val foregroundStage = mapScreen.indexOf("automaticForegroundPermissionLauncher.launch")
+        val backgroundStage = mapScreen.indexOf("automaticBackgroundPermissionLauncher.launch")
         assertTrue(foregroundStage >= 0)
         assertTrue(backgroundStage >= 0)
         assertTrue(mapScreen.contains("Manifest.permission.ACTIVITY_RECOGNITION"))
@@ -133,7 +133,7 @@ class ProjectAcceptanceTest {
         assertTrue(!actions.contains("startForeground"))
         assertTrue(manifest.contains("android.intent.action.BOOT_COMPLETED"))
         assertTrue(manifest.contains("android.intent.action.MY_PACKAGE_REPLACED"))
-        assertTrue(manifest.contains(".tracking.PassiveTrackingReceiver"))
+        assertTrue(manifest.contains(".tracking.AutomaticTrackingReceiver"))
     }
 
     @Test

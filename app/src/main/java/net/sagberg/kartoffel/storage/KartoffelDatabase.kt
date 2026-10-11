@@ -154,18 +154,115 @@ internal val MIGRATION_7_8 = Migration(7, 8) { connection ->
     )
 }
 
+/** Renames stored names to match the domain language in CONTEXT.md. */
+internal val MIGRATION_8_9 = Migration(8, 9) { connection ->
+    connection.execSQL("ALTER TABLE recording_sessions RENAME TO recordings")
+    connection.execSQL("ALTER TABLE manual_route_claims RENAME TO drawn_routes")
+    connection.execSQL(
+        "ALTER TABLE location_samples RENAME COLUMN recording_session_id TO recording_id",
+    )
+    connection.execSQL(
+        "ALTER TABLE tracking_settings RENAME COLUMN passive_enabled TO automatic_enabled",
+    )
+    connection.execSQL(
+        "ALTER TABLE tracking_settings " +
+            "RENAME COLUMN passive_period_started_at_ms TO automatic_period_started_at_ms",
+    )
+    connection.execSQL(
+        "ALTER TABLE coverage_settings " +
+            "RENAME COLUMN maximum_interpolation_gap_steps TO maximum_interpolation_distance_steps",
+    )
+    connection.execSQL("DROP INDEX index_location_samples_recording_session_id_captured_at_ms")
+    connection.execSQL(
+        "CREATE INDEX index_location_samples_recording_id_captured_at_ms " +
+            "ON location_samples(recording_id, captured_at_ms)",
+    )
+
+    // Room migrates with foreign keys off, so renaming a parent table leaves child references
+    // pointing at the old name. Rebuild the child tables to reference the renamed parents.
+    connection.execSQL(
+        """
+        CREATE TABLE recording_points (
+            sample_id INTEGER NOT NULL,
+            recording_id INTEGER NOT NULL,
+            captured_at_ms INTEGER NOT NULL,
+            cell_id INTEGER NOT NULL,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            PRIMARY KEY(sample_id),
+            FOREIGN KEY(recording_id) REFERENCES recordings(id)
+                ON UPDATE NO ACTION ON DELETE CASCADE,
+            FOREIGN KEY(sample_id) REFERENCES location_samples(id)
+                ON UPDATE NO ACTION ON DELETE CASCADE
+        )
+        """.trimIndent(),
+    )
+    connection.execSQL(
+        """
+        INSERT INTO recording_points
+            (sample_id, recording_id, captured_at_ms, cell_id, latitude, longitude)
+        SELECT sample_id, recording_session_id, captured_at_ms, cell_id, latitude, longitude
+        FROM recording_session_points
+        """.trimIndent(),
+    )
+    connection.execSQL("DROP TABLE recording_session_points")
+    connection.execSQL(
+        "CREATE INDEX index_recording_points_recording_id_captured_at_ms " +
+            "ON recording_points(recording_id, captured_at_ms)",
+    )
+
+    connection.execSQL(
+        """
+        CREATE TABLE drawn_route_cells (
+            route_id INTEGER NOT NULL,
+            cell_id INTEGER NOT NULL,
+            PRIMARY KEY(route_id, cell_id),
+            FOREIGN KEY(route_id) REFERENCES drawn_routes(id)
+                ON UPDATE NO ACTION ON DELETE CASCADE
+        )
+        """.trimIndent(),
+    )
+    connection.execSQL(
+        "INSERT INTO drawn_route_cells (route_id, cell_id) " +
+            "SELECT claim_id, cell_id FROM manual_route_claim_cells",
+    )
+    connection.execSQL("DROP TABLE manual_route_claim_cells")
+    connection.execSQL(
+        "CREATE INDEX index_drawn_route_cells_route_id ON drawn_route_cells(route_id)",
+    )
+    connection.execSQL(
+        "CREATE INDEX index_drawn_route_cells_cell_id ON drawn_route_cells(cell_id)",
+    )
+
+    connection.execSQL(
+        "UPDATE location_samples SET source = 'automatic_tracking' " +
+            "WHERE source = 'passive_tracking'",
+    )
+    connection.execSQL(
+        "UPDATE location_samples SET source = 'recording' WHERE source = 'recording_session'",
+    )
+    connection.execSQL(
+        "UPDATE location_samples SET trigger = 'active_recording' " +
+            "WHERE trigger = 'active_session'",
+    )
+    connection.execSQL(
+        "UPDATE location_samples SET rejection_reason = 'accuracy_exceeds_automatic_limit' " +
+            "WHERE rejection_reason = 'accuracy_exceeds_passive_limit'",
+    )
+}
+
 @Database(
     entities = [
         CoverageCellEntity::class,
         LocationSampleEntity::class,
-        RecordingSessionEntity::class,
-        RecordingSessionPointEntity::class,
+        RecordingEntity::class,
+        RecordingPointEntity::class,
         TrackingSettingsEntity::class,
-        ManualRouteClaimEntity::class,
-        ManualRouteClaimCellEntity::class,
+        DrawnRouteEntity::class,
+        DrawnRouteCellEntity::class,
         CoverageSettingsEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 internal abstract class KartoffelDatabase : RoomDatabase() {
@@ -173,13 +270,13 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
 
     abstract fun locationSamples(): LocationSampleDao
 
-    abstract fun recordingSessions(): RecordingSessionDao
+    abstract fun recordings(): RecordingDao
 
-    abstract fun recordingSessionPoints(): RecordingSessionPointDao
+    abstract fun recordingPoints(): RecordingPointDao
 
     abstract fun trackingSettings(): TrackingSettingsDao
 
-    abstract fun manualRouteClaims(): ManualRouteClaimDao
+    abstract fun drawnRoutes(): DrawnRouteDao
 
     abstract fun coverageSettings(): CoverageSettingsDao
 
@@ -189,7 +286,7 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
 
     companion object {
         internal const val NAME = "kartoffel.db"
-        internal const val VERSION = 8
+        internal const val VERSION = 9
 
         @Volatile
         private var instance: KartoffelDatabase? = null
@@ -209,6 +306,7 @@ internal abstract class KartoffelDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
+                    MIGRATION_8_9,
                 )
                 .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
                 .build()

@@ -32,12 +32,12 @@
         </activity>
 
         <service
-            android:name=".tracking.RecordingSessionService"
+            android:name=".tracking.RecordingService"
             android:exported="false"
             android:foregroundServiceType="location" />
 
         <receiver
-            android:name=".tracking.PassiveTrackingReceiver"
+            android:name=".tracking.AutomaticTrackingReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

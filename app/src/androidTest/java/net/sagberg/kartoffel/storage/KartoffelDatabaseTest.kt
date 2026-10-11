@@ -42,13 +42,13 @@ class KartoffelDatabaseTest {
             cellId = cellId,
             firstSeenAtMillis = 2_000,
             lastSeenAtMillis = 3_000,
-            evidenceMask = evidenceMaskOf(CoverageEvidenceSource.PASSIVE_TRACKING),
+            evidenceMask = evidenceMaskOf(CoverageEvidenceSource.AUTOMATIC_TRACKING),
         )
         dao.upsert(
             cellId = cellId,
             firstSeenAtMillis = 1_000,
             lastSeenAtMillis = 4_000,
-            evidenceMask = evidenceMaskOf(CoverageEvidenceSource.RECORDING_SESSION),
+            evidenceMask = evidenceMaskOf(CoverageEvidenceSource.RECORDING),
         )
 
         assertEquals(
@@ -57,8 +57,8 @@ class KartoffelDatabaseTest {
                 firstSeenAtMillis = 1_000,
                 lastSeenAtMillis = 4_000,
                 evidenceMask = evidenceMaskOf(
-                    CoverageEvidenceSource.PASSIVE_TRACKING,
-                    CoverageEvidenceSource.RECORDING_SESSION,
+                    CoverageEvidenceSource.AUTOMATIC_TRACKING,
+                    CoverageEvidenceSource.RECORDING,
                 ),
             ),
             dao.find(cellId),
@@ -76,7 +76,7 @@ class KartoffelDatabaseTest {
                 cellId = cellId,
                 firstSeenAtMillis = 1_000,
                 lastSeenAtMillis = 1_000,
-                evidenceMask = evidenceMaskOf(CoverageEvidenceSource.RECORDING_SESSION),
+                evidenceMask = evidenceMaskOf(CoverageEvidenceSource.RECORDING),
             )
         }
 
@@ -101,17 +101,17 @@ class KartoffelDatabaseTest {
     }
 
     @Test
-    fun passiveTrackingPreferenceDefaultsOffAndRoundTrips() = runBlocking {
-        val preferences = PassiveTrackingPreferences(database.trackingSettings())
+    fun automaticTrackingPreferenceDefaultsOffAndRoundTrips() = runBlocking {
+        val preferences = AutomaticTrackingPreferences(database.trackingSettings())
 
         assertEquals(false, preferences.observe().first().enabled)
 
-        preferences.enable(passivePeriodStartedAtMillis = 12_000)
+        preferences.enable(automaticPeriodStartedAtMillis = 12_000)
 
         assertEquals(
-            PassiveTrackingPreference(
+            AutomaticTrackingPreference(
                 enabled = true,
-                passivePeriodStartedAtMillis = 12_000,
+                automaticPeriodStartedAtMillis = 12_000,
             ),
             preferences.observe().first(),
         )
@@ -128,12 +128,12 @@ class KartoffelDatabaseTest {
         assertEquals(CoverageSettings.Default, settings.observe().first())
 
         settings.setMaximumAcceptedAccuracyMeters(40)
-        settings.setMaximumInterpolationGapSteps(7)
+        settings.setMaximumInterpolationDistanceSteps(7)
 
         assertEquals(
             CoverageSettings(
                 maximumAcceptedAccuracyMeters = 40,
-                maximumInterpolationGapSteps = 7,
+                maximumInterpolationDistanceSteps = 7,
             ),
             settings.current(),
         )
@@ -152,8 +152,8 @@ class KartoffelDatabaseTest {
         latitude = 59.9109,
         longitude = 10.7522,
         accuracyMeters = 7.5,
-        source = "recording_session",
-        trigger = "active_session",
+        source = "recording",
+        trigger = "active_recording",
         accepted = accepted,
         rejectionReason = rejectionReason,
     )

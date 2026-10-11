@@ -19,8 +19,8 @@ internal data class CoverageSettingsEntity(
     val id: Int = SINGLETON_ID,
     @ColumnInfo(name = "maximum_accepted_accuracy_meters")
     val maximumAcceptedAccuracyMeters: Int,
-    @ColumnInfo(name = "maximum_interpolation_gap_steps")
-    val maximumInterpolationGapSteps: Int,
+    @ColumnInfo(name = "maximum_interpolation_distance_steps")
+    val maximumInterpolationDistanceSteps: Int,
 ) {
     init {
         require(id == SINGLETON_ID)
@@ -44,24 +44,24 @@ internal interface CoverageSettingsDao {
 
     @Query(
         "INSERT INTO coverage_settings " +
-            "(id, maximum_accepted_accuracy_meters, maximum_interpolation_gap_steps) " +
-            "VALUES (1, :value, :defaultInterpolationGapSteps) " +
+            "(id, maximum_accepted_accuracy_meters, maximum_interpolation_distance_steps) " +
+            "VALUES (1, :value, :defaultInterpolationDistanceSteps) " +
             "ON CONFLICT(id) DO UPDATE SET " +
             "maximum_accepted_accuracy_meters = :value",
     )
     suspend fun setMaximumAcceptedAccuracyMeters(
         value: Int,
-        defaultInterpolationGapSteps: Int,
+        defaultInterpolationDistanceSteps: Int,
     )
 
     @Query(
         "INSERT INTO coverage_settings " +
-            "(id, maximum_accepted_accuracy_meters, maximum_interpolation_gap_steps) " +
+            "(id, maximum_accepted_accuracy_meters, maximum_interpolation_distance_steps) " +
             "VALUES (1, :defaultAcceptedAccuracyMeters, :value) " +
             "ON CONFLICT(id) DO UPDATE SET " +
-            "maximum_interpolation_gap_steps = :value",
+            "maximum_interpolation_distance_steps = :value",
     )
-    suspend fun setMaximumInterpolationGapSteps(
+    suspend fun setMaximumInterpolationDistanceSteps(
         value: Int,
         defaultAcceptedAccuracyMeters: Int,
     )
@@ -83,16 +83,16 @@ internal class RoomCoverageSettings(
         updateMutex.withLock {
             dao.setMaximumAcceptedAccuracyMeters(
                 value = value,
-                defaultInterpolationGapSteps = CoverageSettings.Default
-                    .maximumInterpolationGapSteps,
+                defaultInterpolationDistanceSteps = CoverageSettings.Default
+                    .maximumInterpolationDistanceSteps,
             )
         }
     }
 
-    override suspend fun setMaximumInterpolationGapSteps(value: Int) {
-        CoverageSettings.Default.copy(maximumInterpolationGapSteps = value)
+    override suspend fun setMaximumInterpolationDistanceSteps(value: Int) {
+        CoverageSettings.Default.copy(maximumInterpolationDistanceSteps = value)
         updateMutex.withLock {
-            dao.setMaximumInterpolationGapSteps(
+            dao.setMaximumInterpolationDistanceSteps(
                 value = value,
                 defaultAcceptedAccuracyMeters = CoverageSettings.Default
                     .maximumAcceptedAccuracyMeters,
@@ -110,11 +110,11 @@ internal class RoomCoverageSettings(
 private fun CoverageSettingsEntity?.toSettings(): CoverageSettings = this?.let {
     CoverageSettings(
         maximumAcceptedAccuracyMeters = maximumAcceptedAccuracyMeters,
-        maximumInterpolationGapSteps = maximumInterpolationGapSteps,
+        maximumInterpolationDistanceSteps = maximumInterpolationDistanceSteps,
     )
 } ?: CoverageSettings.Default
 
 private fun CoverageSettings.toEntity(): CoverageSettingsEntity = CoverageSettingsEntity(
     maximumAcceptedAccuracyMeters = maximumAcceptedAccuracyMeters,
-    maximumInterpolationGapSteps = maximumInterpolationGapSteps,
+    maximumInterpolationDistanceSteps = maximumInterpolationDistanceSteps,
 )

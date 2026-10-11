@@ -24,10 +24,10 @@ class CoverageSettingsScreenTest {
                 CoverageSettingsScreen(
                     settings = CoverageSettings(
                         maximumAcceptedAccuracyMeters = 40,
-                        maximumInterpolationGapSteps = 7,
+                        maximumInterpolationDistanceSteps = 7,
                     ),
                     onMaximumAcceptedAccuracyChangeFinished = {},
-                    onMaximumInterpolationGapChangeFinished = {},
+                    onMaximumInterpolationDistanceChangeFinished = {},
                     onReset = {},
                     onBack = {},
                 )
@@ -36,7 +36,7 @@ class CoverageSettingsScreenTest {
 
         compose.onNodeWithText("Maximum accepted accuracy").assertIsDisplayed()
         compose.onNodeWithText("40 m").assertIsDisplayed()
-        compose.onNodeWithText("Maximum interpolation gap").assertIsDisplayed()
+        compose.onNodeWithText("Maximum interpolation distance").assertIsDisplayed()
         compose.onNodeWithText("7 steps").assertIsDisplayed()
         compose.onNodeWithText("Reset to defaults").assertIsDisplayed()
     }
@@ -49,7 +49,7 @@ class CoverageSettingsScreenTest {
                 CoverageSettingsScreen(
                     settings = CoverageSettings.Default,
                     onMaximumAcceptedAccuracyChangeFinished = {},
-                    onMaximumInterpolationGapChangeFinished = {},
+                    onMaximumInterpolationDistanceChangeFinished = {},
                     onReset = { resetCount += 1 },
                     onBack = {},
                 )
@@ -64,13 +64,13 @@ class CoverageSettingsScreenTest {
     @Test
     fun slidersCommitDiscreteValuesWhenInteractionFinishes() {
         var acceptedAccuracy: Int? = null
-        var interpolationGap: Int? = null
+        var interpolationDistance: Int? = null
         compose.setContent {
             MaterialTheme {
                 CoverageSettingsScreen(
                     settings = CoverageSettings.Default,
                     onMaximumAcceptedAccuracyChangeFinished = { acceptedAccuracy = it },
-                    onMaximumInterpolationGapChangeFinished = { interpolationGap = it },
+                    onMaximumInterpolationDistanceChangeFinished = { interpolationDistance = it },
                     onReset = {},
                     onBack = {},
                 )
@@ -83,7 +83,7 @@ class CoverageSettingsScreenTest {
                 end = Offset(width * 0.95f, center.y),
             )
         }
-        compose.onNodeWithTag("maximum_interpolation_gap_slider")
+        compose.onNodeWithTag("maximum_interpolation_distance_slider")
             .performTouchInput {
                 swipe(
                     start = Offset(width * 0.25f, center.y),
@@ -93,7 +93,7 @@ class CoverageSettingsScreenTest {
 
         compose.runOnIdle {
             assertEquals(50, acceptedAccuracy)
-            assertEquals(10, interpolationGap)
+            assertEquals(10, interpolationDistance)
         }
     }
 }

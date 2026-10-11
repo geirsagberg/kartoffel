@@ -49,21 +49,21 @@ import kotlin.time.Duration.Companion.hours
 @Composable
 internal fun TrackingInspectionControls(
     filter: TrackingInspectionFilter,
-    sessions: List<InspectionRecordingSession>,
+    recordings: List<InspectionRecording>,
     nowMillis: Long,
     loading: Boolean,
     empty: Boolean,
     onFilterChange: (TrackingInspectionFilter) -> Unit,
-    manualRouteClaims: List<InspectionManualRouteClaim> = emptyList(),
-    selectedManualRouteClaimId: Long? = null,
-    onSelectManualRouteClaim: (Long) -> Unit = {},
-    onWithdrawManualRouteClaim: (Long) -> Unit = {},
+    drawnRoutes: List<InspectionDrawnRoute> = emptyList(),
+    selectedDrawnRouteId: Long? = null,
+    onSelectDrawnRoute: (Long) -> Unit = {},
+    onRemoveDrawnRoute: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var scopeMenu by remember { mutableStateOf(false) }
     var timeMenu by remember { mutableStateOf(false) }
     var filtersExpanded by rememberSaveable { mutableStateOf(false) }
-    var pendingWithdrawal by remember { mutableStateOf<InspectionManualRouteClaim?>(null) }
+    var pendingRemoval by remember { mutableStateOf<InspectionDrawnRoute?>(null) }
     val customTime = filter.time as? TrackingInspectionTime.Custom
     var customStart by remember(filter.time) {
         mutableStateOf(customTime?.startMillis?.localDateTime().orEmpty())
@@ -73,28 +73,28 @@ internal fun TrackingInspectionControls(
     }
     val scopes = listOf(
         TrackingInspectionScope.AllTracking,
-        TrackingInspectionScope.PassiveTracking,
-        TrackingInspectionScope.AllRecordingSessions,
-    ) + sessions.map { TrackingInspectionScope.RecordingSession(it.id) }
+        TrackingInspectionScope.AutomaticTracking,
+        TrackingInspectionScope.AllRecordings,
+    ) + recordings.map { TrackingInspectionScope.Recording(it.id) }
     val times = listOf(
         TrackingInspectionTime.AllTime,
         TrackingInspectionTime.Last24Hours(nowMillis),
         TrackingInspectionTime.Last7Days(nowMillis),
     )
 
-    pendingWithdrawal?.let { claim ->
+    pendingRemoval?.let { route ->
         AlertDialog(
-            onDismissRequest = { pendingWithdrawal = null },
-            title = { Text("Withdraw Manual Route Claim?") },
-            text = { Text("Cells supported only by this claim will be fogged again.") },
+            onDismissRequest = { pendingRemoval = null },
+            title = { Text("Remove drawn route?") },
+            text = { Text("Places only this route cleared will be fogged again.") },
             dismissButton = {
-                TextButton(onClick = { pendingWithdrawal = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingRemoval = null }) { Text("Cancel") }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    pendingWithdrawal = null
-                    onWithdrawManualRouteClaim(claim.id)
-                }) { Text("Withdraw") }
+                    pendingRemoval = null
+                    onRemoveDrawnRoute(route.id)
+                }) { Text("Remove") }
             },
         )
     }
@@ -117,7 +117,7 @@ internal fun TrackingInspectionControls(
                         FilterChip(
                             selected = filter.scope != TrackingInspectionScope.AllTracking,
                             onClick = { scopeMenu = true },
-                            label = { Text(filter.scope.label(sessions)) },
+                            label = { Text(filter.scope.label(recordings)) },
                         )
                         DropdownMenu(
                             expanded = scopeMenu,
@@ -125,7 +125,7 @@ internal fun TrackingInspectionControls(
                         ) {
                             scopes.forEach { scope ->
                                 DropdownMenuItem(
-                                    text = { Text(scope.label(sessions)) },
+                                    text = { Text(scope.label(recordings)) },
                                     onClick = {
                                         scopeMenu = false
                                         onFilterChange(filter.copy(scope = scope))
@@ -181,7 +181,7 @@ internal fun TrackingInspectionControls(
                     label = "Scope",
                     choices = scopes,
                     selected = filter.scope,
-                    choiceLabel = { it.label(sessions) },
+                    choiceLabel = { it.label(recordings) },
                     onChange = { onFilterChange(filter.copy(scope = it)) },
                 )
                 FilterGroup(
@@ -235,23 +235,23 @@ internal fun TrackingInspectionControls(
             }
 
             InspectionLegend()
-            if (manualRouteClaims.isNotEmpty()) {
+            if (drawnRoutes.isNotEmpty()) {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 220.dp)
-                        .testTag("manual_route_claim_list"),
+                        .testTag("drawn_route_list"),
                 ) {
-                    itemsIndexed(manualRouteClaims, key = { _, claim -> claim.id }) { index, claim ->
+                    itemsIndexed(drawnRoutes, key = { _, route -> route.id }) { index, route ->
                         if (index > 0) HorizontalDivider()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 6.dp)
-                                .testTag("manual_route_claim_${claim.id}"),
+                                .testTag("drawn_route_${route.id}"),
                         ) {
                             Text(
-                                "Manual Route Claim · ${claim.createdAtMillis.compactTime()}",
+                                "Drawn route · ${route.createdAtMillis.compactTime()}",
                                 modifier = Modifier.fillMaxWidth(),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -260,9 +260,9 @@ internal fun TrackingInspectionControls(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End,
                             ) {
-                                TextButton(onClick = { onSelectManualRouteClaim(claim.id) }) {
+                                TextButton(onClick = { onSelectDrawnRoute(route.id) }) {
                                     Text(
-                                        if (selectedManualRouteClaimId == claim.id) {
+                                        if (selectedDrawnRouteId == route.id) {
                                             "Previewing"
                                         } else {
                                             "Preview"
@@ -272,11 +272,11 @@ internal fun TrackingInspectionControls(
                                 }
                                 TextButton(
                                     modifier = Modifier.testTag(
-                                        "withdraw_manual_route_claim_${claim.id}",
+                                        "remove_drawn_route_${route.id}",
                                     ),
-                                    onClick = { pendingWithdrawal = claim },
+                                    onClick = { pendingRemoval = route },
                                 ) {
-                                    Text("Withdraw", maxLines = 1)
+                                    Text("Remove", maxLines = 1)
                                 }
                             }
                         }
@@ -453,16 +453,16 @@ private fun String.toEpochMillisOrNull(): Long? = runCatching {
         .toEpochMilli()
 }.getOrNull()
 
-private fun TrackingInspectionScope.label(sessions: List<InspectionRecordingSession>): String =
+private fun TrackingInspectionScope.label(recordings: List<InspectionRecording>): String =
     when (this) {
         TrackingInspectionScope.AllTracking -> "All tracking"
-        TrackingInspectionScope.PassiveTracking -> "Passive"
-        TrackingInspectionScope.AllRecordingSessions -> "All Recording Sessions"
-        is TrackingInspectionScope.RecordingSession ->
-            sessions.firstOrNull { it.id == id }?.displayName ?: "Recording Session"
+        TrackingInspectionScope.AutomaticTracking -> "Automatic"
+        TrackingInspectionScope.AllRecordings -> "All recordings"
+        is TrackingInspectionScope.Recording ->
+            recordings.firstOrNull { it.id == id }?.displayName ?: "Recording"
     }
 
-private val InspectionRecordingSession.displayName: String
+private val InspectionRecording.displayName: String
     get() {
         val duration = endedAtMillis?.let { ((it - startedAtMillis) / 60_000).coerceAtLeast(0) }
         return buildString {
@@ -488,12 +488,12 @@ private val DiagnosticCellState.label: String
 
 private val Set<DiagnosticProvenance>.displayName: String
     get() {
-        val passive = any { it.name.startsWith("Passive") }
+        val automatic = any { it.name.startsWith("Automatic") }
         val recording = any { it.name.startsWith("Recording") }
         return when {
-            passive && recording -> "Passive + Recording Session"
-            passive -> "Passive"
-            recording -> "Recording Session"
+            automatic && recording -> "Automatic + Recording"
+            automatic -> "Automatic"
+            recording -> "Recording"
             else -> "No source provenance"
         }
     }
@@ -501,11 +501,11 @@ private val Set<DiagnosticProvenance>.displayName: String
 private val DiagnosticSampleCell.coverageEvidenceLabel: String
     get() {
         val observed = provenance.any {
-            it == DiagnosticProvenance.PassiveObserved ||
+            it == DiagnosticProvenance.AutomaticObserved ||
                 it == DiagnosticProvenance.RecordingObserved
         }
         val inferred = provenance.any {
-            it == DiagnosticProvenance.PassiveInferred ||
+            it == DiagnosticProvenance.AutomaticInferred ||
                 it == DiagnosticProvenance.RecordingInferred
         }
         return when {
@@ -532,7 +532,7 @@ private val DiagnosticSample.displayName: String
         capturedAtMillis.compactTime(),
         if (accepted) "Accepted" else "Rejected",
         "${accuracyMeters.toInt()} m",
-        recordingSessionId?.let { "Recording Session" } ?: "Passive",
-        recordingSessionId?.let { "Session $it" } ?: trigger?.replace('_', ' '),
+        recordingId?.let { "Recording" } ?: "Automatic",
+        recordingId?.let { "Recording $it" } ?: trigger?.replace('_', ' '),
         activityMode.replace('_', ' ').replaceFirstChar(Char::uppercase),
     ).joinToString(" · ")
