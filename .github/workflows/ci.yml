@@ -26,6 +26,6 @@ jobs:
           cache: gradle
       - name: Install Android SDK packages
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37' 'build-tools;37.0.0'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;37.0.0'
       - name: Test, lint and build
         run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
