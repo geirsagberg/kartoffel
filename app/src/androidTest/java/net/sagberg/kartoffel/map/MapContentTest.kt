@@ -135,6 +135,27 @@ class MapContentTest {
     }
 
     @Test
+    fun mapControlsHaveRoomBelowTheFloatingBar() {
+        var mapTopPadding = 0.dp
+        compose.setContent {
+            MaterialTheme {
+                MapContent(
+                    hasLocationPermission = true,
+                    isRecording = false,
+                    onRequestLocationPermission = {},
+                    onStartRecording = {},
+                    onStopRecording = {},
+                    onCenterCurrentLocation = {},
+                    map = { _, padding -> mapTopPadding = padding.calculateTopPadding() },
+                )
+            }
+        }
+
+        val bar = compose.onNodeWithTag("floating_map_bar").getUnclippedBoundsInRoot()
+        compose.runOnIdle { assertTrue(mapTopPadding >= bar.bottom + 8.dp) }
+    }
+
+    @Test
     fun secondaryActionsAreAvailableFromTheOverflowMenu() {
         var settingsOpened = false
         var diagnosticsOpened = false
@@ -160,7 +181,7 @@ class MapContentTest {
         compose.onNodeWithText("Tracking inspection").assertIsDisplayed()
         compose.onNodeWithText("Enable automatic tracking").assertIsDisplayed()
         compose.onNodeWithText("Tracking diagnostics").assertIsDisplayed()
-        compose.onNodeWithText("Draw route").assertIsDisplayed()
+        compose.onAllNodesWithText("Draw route").assertCountEquals(0)
         compose.onNodeWithText("Settings").performClick()
         compose.runOnIdle { assertEquals(true, settingsOpened) }
         compose.onNodeWithContentDescription("More options").performClick()
@@ -221,7 +242,7 @@ class MapContentTest {
                         drawingActive.value = false
                         preview.value = DrawnRoutePreview()
                     },
-                    map = { interactions ->
+                    map = { interactions, _ ->
                         // Centred so that the floating bar over the map does not cover them.
                         Column(Modifier.align(Alignment.Center)) {
                             Box(
@@ -273,14 +294,12 @@ class MapContentTest {
         compose.onNodeWithText("Cancel").performClick()
         compose.runOnIdle { assertEquals(DrawnRoutePreview(), preview.value) }
 
-        compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Draw route").performClick()
+        compose.onNodeWithContentDescription("Draw route").performClick()
         pressBack()
         compose.runOnIdle { assertEquals(false, drawingActive.value) }
         compose.onAllNodesWithText("Discard route?").assertCountEquals(0)
 
-        compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Draw route").performClick()
+        compose.onNodeWithContentDescription("Draw route").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
         pressBack()
         compose.onNodeWithText("Discard route?").assertIsDisplayed()
@@ -289,8 +308,7 @@ class MapContentTest {
         compose.onNodeWithText("Discard").performClick()
         compose.runOnIdle { assertEquals(false, drawingActive.value) }
 
-        compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Draw route").performClick()
+        compose.onNodeWithContentDescription("Draw route").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
         compose.onNodeWithText("Stop", useUnmergedTree = true).performClick()
@@ -368,7 +386,7 @@ class MapContentTest {
                         removed = it
                         snapshot.value = snapshot.value.copy(drawnRoutes = emptyList())
                     },
-                    map = {
+                    map = { _, _ ->
                         Box(
                             Modifier
                                 .size(1.dp)
@@ -495,7 +513,7 @@ class MapContentTest {
                     onCenterCurrentLocation = {},
                     onEnableAutomaticTracking = { automaticEnabled.value = true },
                     onDisableAutomaticTracking = { automaticEnabled.value = false },
-                    map = {},
+                    map = { _, _ -> },
                 )
             }
         }
@@ -536,7 +554,7 @@ class MapContentTest {
                     onStartRecording = { requestedRecording.value = true },
                     onStopRecording = { requestedRecording.value = false },
                     onCenterCurrentLocation = {},
-                    map = {},
+                    map = { _, _ -> },
                 )
             }
         }
@@ -576,7 +594,7 @@ class MapContentTest {
                     onStartRecording = {},
                     onStopRecording = {},
                     onCenterCurrentLocation = {},
-                    map = {},
+                    map = { _, _ -> },
                 )
             }
         }
@@ -620,7 +638,7 @@ class MapContentTest {
                     onStartRecording = {},
                     onStopRecording = {},
                     onCenterCurrentLocation = {},
-                    map = {},
+                    map = { _, _ -> },
                 )
             }
         }
@@ -651,7 +669,7 @@ class MapContentTest {
                     onStartRecording = {},
                     onStopRecording = {},
                     onCenterCurrentLocation = {},
-                    map = {},
+                    map = { _, _ -> },
                 )
             }
         }
@@ -688,17 +706,19 @@ class MapContentTest {
                     onStartRecording = {},
                     onStopRecording = {},
                     onCenterCurrentLocation = {},
-                    onOpenSettings = onOpenSettings,
-                    onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
-                    onBackupDatabase = onBackupDatabase,
-                    onRestoreDatabase = onRestoreDatabase,
-                    onOpenAppearance = onOpenAppearance,
+                    menuActions = MapMenuActions(
+                        onOpenSettings = onOpenSettings,
+                        onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
+                        onBackupDatabase = onBackupDatabase,
+                        onRestoreDatabase = onRestoreDatabase,
+                        onOpenAppearance = onOpenAppearance,
+                    ),
                     inspectionActive = inspectionActive,
                     onEnterTrackingInspection = onEnterTrackingInspection,
                     onExitTrackingInspection = onExitTrackingInspection,
                     inspectionSnapshot = inspectionSnapshot,
                     selectedInspectionCellId = selectedInspectionCellId,
-                    map = {
+                    map = { _, _ ->
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()

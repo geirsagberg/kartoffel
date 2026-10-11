@@ -7,7 +7,8 @@ import net.sagberg.kartoffel.coverage.GeoCoordinate
 /**
  * Returns the closed rings that trace the edge of the given cells' union. Edges shared by two
  * cells are interior and dropped; the remaining edges are chained into rings. Each ring lists its
- * vertices once, without repeating the first vertex at the end.
+ * vertices once, without repeating the first vertex at the end. Input must be non-overlapping
+ * cells from the same H3 resolution, as used by Street-Level Coverage.
  */
 internal fun coverageOutline(cells: List<CoverageCellShape>): List<List<GeoCoordinate>> {
     val edges = cells.flatMap { cell ->

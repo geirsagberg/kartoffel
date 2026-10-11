@@ -6,13 +6,18 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import net.sagberg.kartoffel.R
+
+internal val LocalDarkTheme = staticCompositionLocalOf { false }
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF006B57),
@@ -69,10 +74,10 @@ private val DarkColors = darkColorScheme(
 )
 
 // Google Sans Flex from github.com/google/fonts (ofl/googlesansflex), licensed under the SIL Open
-// Font License in app/licenses/. It is a variable font; each weight sets its weight axis.
+// Font License in app/licenses/. Only weight 400–600 varies; unused axes are pinned to defaults.
 @OptIn(ExperimentalTextApi::class)
 private val GoogleSansFlex = FontFamily(
-    listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold).map { weight ->
+    listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold).map { weight ->
         Font(
             resId = R.font.google_sans_flex,
             weight = weight,
@@ -81,23 +86,25 @@ private val GoogleSansFlex = FontFamily(
     },
 )
 
+private val KartoffelFont = TextStyle(fontFamily = GoogleSansFlex)
+
 private val KartoffelTypography = Typography().run {
     Typography(
-        displayLarge = displayLarge.copy(fontFamily = GoogleSansFlex),
-        displayMedium = displayMedium.copy(fontFamily = GoogleSansFlex),
-        displaySmall = displaySmall.copy(fontFamily = GoogleSansFlex),
-        headlineLarge = headlineLarge.copy(fontFamily = GoogleSansFlex),
-        headlineMedium = headlineMedium.copy(fontFamily = GoogleSansFlex),
-        headlineSmall = headlineSmall.copy(fontFamily = GoogleSansFlex),
-        titleLarge = titleLarge.copy(fontFamily = GoogleSansFlex),
-        titleMedium = titleMedium.copy(fontFamily = GoogleSansFlex),
-        titleSmall = titleSmall.copy(fontFamily = GoogleSansFlex),
-        bodyLarge = bodyLarge.copy(fontFamily = GoogleSansFlex),
-        bodyMedium = bodyMedium.copy(fontFamily = GoogleSansFlex),
-        bodySmall = bodySmall.copy(fontFamily = GoogleSansFlex),
-        labelLarge = labelLarge.copy(fontFamily = GoogleSansFlex),
-        labelMedium = labelMedium.copy(fontFamily = GoogleSansFlex),
-        labelSmall = labelSmall.copy(fontFamily = GoogleSansFlex),
+        displayLarge = displayLarge.merge(KartoffelFont),
+        displayMedium = displayMedium.merge(KartoffelFont),
+        displaySmall = displaySmall.merge(KartoffelFont),
+        headlineLarge = headlineLarge.merge(KartoffelFont),
+        headlineMedium = headlineMedium.merge(KartoffelFont),
+        headlineSmall = headlineSmall.merge(KartoffelFont),
+        titleLarge = titleLarge.merge(KartoffelFont),
+        titleMedium = titleMedium.merge(KartoffelFont),
+        titleSmall = titleSmall.merge(KartoffelFont),
+        bodyLarge = bodyLarge.merge(KartoffelFont),
+        bodyMedium = bodyMedium.merge(KartoffelFont),
+        bodySmall = bodySmall.merge(KartoffelFont),
+        labelLarge = labelLarge.merge(KartoffelFont),
+        labelMedium = labelMedium.merge(KartoffelFont),
+        labelSmall = labelSmall.merge(KartoffelFont),
     )
 }
 
@@ -106,9 +113,11 @@ fun KartoffelTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = KartoffelTypography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            typography = KartoffelTypography,
+            content = content,
+        )
+    }
 }

@@ -11,6 +11,7 @@ import net.sagberg.kartoffel.coverage.H3CoverageCells
 import net.sagberg.kartoffel.coverage.SeededCoverageCells
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -99,7 +100,9 @@ class FogTileProviderTest {
     @Test
     fun outlineIsDrawnAlongTheEdgeOfVisitedCoverage() {
         val edge = LoneCellEdge()
-        val provider = FogTileProvider(edge.snapshot, CoverageOutlinePaint(Color.RED, width = 4f))
+        val provider = FogTileProvider(edge.snapshot).apply {
+            updateOutline(CoverageOutlinePaint(Color.RED, width = 4f))
+        }
 
         val bitmap = provider.render(edge.tile)
 
@@ -121,16 +124,17 @@ class FogTileProviderTest {
     }
 
     @Test
-    fun glowSpreadsIntoTheFogButNotIntoVisitedCoverage() {
+    fun haloSpreadsIntoTheFogButNotIntoVisitedCoverage() {
         val edge = LoneCellEdge()
-        val provider = FogTileProvider(
-            edge.snapshot,
-            CoverageOutlinePaint(
-                color = Color.WHITE,
-                width = 1.5f,
-                glow = CoverageOutlinePaint.Glow(Color.WHITE, width = 10f, blurRadius = 5f),
-            ),
-        )
+        val provider = FogTileProvider(edge.snapshot).apply {
+            updateOutline(
+                CoverageOutlinePaint(
+                    color = Color.WHITE,
+                    width = 1.5f,
+                    halo = CoverageOutlinePaint.Halo(Color.WHITE, width = 10f, blurRadius = 5f),
+                ),
+            )
+        }
 
         val bitmap = provider.render(edge.tile)
 
@@ -142,13 +146,52 @@ class FogTileProviderTest {
     @Test
     fun changingTheOutlineRendersNewTiles() {
         val edge = LoneCellEdge()
-        val provider = FogTileProvider(edge.snapshot, CoverageOutlinePaint(Color.RED, width = 4f))
+        val provider = FogTileProvider(edge.snapshot).apply {
+            updateOutline(CoverageOutlinePaint(Color.RED, width = 4f))
+        }
 
         assertFalse(provider.updateOutline(CoverageOutlinePaint(Color.RED, width = 4f)))
         assertTrue(provider.updateOutline(CoverageOutlinePaint(Color.BLUE, width = 4f)))
 
         val onEdge = provider.render(edge.tile).pixelAt(edge.midpoint)
         assertTrue(Color.blue(onEdge) > 200 && Color.red(onEdge) < 60)
+    }
+
+    @Test
+    fun tileRenderedWithAnOldOutlineRequestsARetry() {
+        val edge = LoneCellEdge()
+        lateinit var provider: FogTileProvider
+        var changeOutline = true
+        provider = FogTileProvider(edge.snapshot, renderPng = { renderer, tile, cells ->
+            renderer.renderPng(tile, cells).also {
+                if (changeOutline) {
+                    changeOutline = false
+                    provider.updateOutline(CoverageOutlinePaint(Color.BLUE, width = 4f))
+                }
+            }
+        })
+
+        assertNull(provider.getTile(edge.tile.x, edge.tile.y, edge.tile.zoom))
+        val onEdge = provider.render(edge.tile).pixelAt(edge.midpoint)
+        assertTrue(Color.blue(onEdge) > 200 && Color.red(onEdge) < 60)
+    }
+
+    @Test
+    fun tileRenderedWithOldCoverageRequestsARetry() {
+        val edge = LoneCellEdge()
+        lateinit var provider: FogTileProvider
+        var changeCoverage = true
+        provider = FogTileProvider(CoverageSnapshot.Empty, renderPng = { renderer, tile, cells ->
+            renderer.renderPng(tile, cells).also {
+                if (changeCoverage) {
+                    changeCoverage = false
+                    provider.updateCoverage(edge.snapshot)
+                }
+            }
+        })
+
+        assertNull(provider.getTile(edge.tile.x, edge.tile.y, edge.tile.zoom))
+        assertEquals(0, Color.alpha(provider.render(edge.tile).pixelAt(edge.inside(8f))))
     }
 
     /** One H3 Coverage Cell in Oslo, large enough at zoom 17 to probe around one of its edges. */

@@ -10,7 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import net.sagberg.kartoffel.diagnostics.TrackingDiagnosticsRoute
 import net.sagberg.kartoffel.map.MapScreen
+import net.sagberg.kartoffel.map.MapMenuActions
 import net.sagberg.kartoffel.settings.AppearanceDialog
 import net.sagberg.kartoffel.settings.AppearancePreferences
 import net.sagberg.kartoffel.settings.CoverageSettingsRoute
@@ -29,10 +30,6 @@ import net.sagberg.kartoffel.ui.theme.KartoffelTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(0, 0),
-            navigationBarStyle = SystemBarStyle.auto(0, 0),
-        )
         setContent {
             KartoffelApp()
         }
@@ -62,12 +59,13 @@ internal fun KartoffelApp() {
         when (destination) {
             KartoffelDestination.MAP -> MapScreen(
                 coverageOutline = appearance.coverageOutline,
-                darkTheme = darkTheme,
-                onOpenSettings = { destination = KartoffelDestination.SETTINGS },
-                onOpenAppearance = { appearanceOpen = true },
-                onOpenTrackingDiagnostics = {
-                    destination = KartoffelDestination.TRACKING_DIAGNOSTICS
-                },
+                menuActions = MapMenuActions(
+                    onOpenSettings = { destination = KartoffelDestination.SETTINGS },
+                    onOpenAppearance = { appearanceOpen = true },
+                    onOpenTrackingDiagnostics = {
+                        destination = KartoffelDestination.TRACKING_DIAGNOSTICS
+                    },
+                ),
             )
             KartoffelDestination.SETTINGS -> {
                 BackHandler { destination = KartoffelDestination.MAP }
@@ -98,9 +96,8 @@ internal fun KartoffelApp() {
 @Composable
 private fun SystemBarsFollowTheme(darkTheme: Boolean) {
     val activity = LocalActivity.current as? ComponentActivity ?: return
-    DisposableEffect(activity, darkTheme) {
+    SideEffect {
         val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkTheme }
         activity.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
-        onDispose {}
     }
 }

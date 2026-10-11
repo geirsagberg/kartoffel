@@ -27,10 +27,15 @@ internal class H3CoverageCells(
     fun pathBetween(start: GeoCoordinate, destination: GeoCoordinate): List<CoverageCellId> =
         h3.gridPathCells(cellAt(start).value, cellAt(destination).value).map(::CoverageCellId)
 
-    fun shapeOf(cell: CoverageCellId): CoverageCellShape = CoverageCellShape(
-        id = cell.value.toString(),
-        boundary = boundaryOf(cell),
-    )
+    fun shapeOf(cell: CoverageCellId): CoverageCellShape {
+        require(h3.getResolution(cell.value) == COVERAGE_CELL_RESOLUTION) {
+            "Street-Level Coverage requires H3 resolution $COVERAGE_CELL_RESOLUTION"
+        }
+        return CoverageCellShape(
+            id = cell.value.toString(),
+            boundary = boundaryOf(cell),
+        )
+    }
 
     fun intermediateCellsForGap(
         start: CoverageCellId,
