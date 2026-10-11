@@ -30,6 +30,8 @@ internal class DrawnRouteEditor(
     ) : this(h3::pathBetween, { cells -> routes.create(clock(), cells) })
 
     private val editingState = MutableStateFlow(DrawnRouteEditingState())
+    // Waypoints move many times per second while dragged, so unchanged segments are reused.
+    private var segments = emptyMap<Pair<GeoCoordinate, GeoCoordinate>, Result<List<CoverageCellId>>>()
     val state = editingState.asStateFlow()
 
     fun enter() {
@@ -77,19 +79,21 @@ internal class DrawnRouteEditor(
     }
 
     private fun previewOf(waypoints: List<GeoCoordinate>): DrawnRoutePreview {
-        if (waypoints.size < 2) return DrawnRoutePreview(waypoints = waypoints)
         val cells = linkedSetOf<CoverageCellId>()
-        waypoints.zipWithNext().forEachIndexed { index, (start, destination) ->
-            val segment = runCatching { pathBetween(start, destination) }
-                .getOrElse {
-                    return DrawnRoutePreview(
-                        waypoints = waypoints,
-                        cells = cells,
-                        failingSegmentIndex = index,
-                    )
-                }
-            cells += segment
+        val computed = mutableMapOf<Pair<GeoCoordinate, GeoCoordinate>, Result<List<CoverageCellId>>>()
+        var failingSegmentIndex: Int? = null
+        for ((index, segment) in waypoints.zipWithNext().withIndex()) {
+            val path = computed.getOrPut(segment) {
+                segments[segment] ?: runCatching { pathBetween(segment.first, segment.second) }
+            }
+            val segmentCells = path.getOrNull()
+            if (segmentCells == null) {
+                failingSegmentIndex = index
+                break
+            }
+            cells += segmentCells
         }
-        return DrawnRoutePreview(waypoints = waypoints, cells = cells)
+        segments = computed
+        return DrawnRoutePreview(waypoints, cells, failingSegmentIndex)
     }
 }

@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,12 +55,12 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.TileOverlay
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberTileOverlayState
+import com.google.maps.android.compose.rememberUpdatedMarkerState
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
@@ -67,7 +68,6 @@ import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 import net.sagberg.kartoffel.coverage.CoverageSnapshot
 import net.sagberg.kartoffel.coverage.GeoBounds
-import net.sagberg.kartoffel.coverage.GeoCoordinate
 import net.sagberg.kartoffel.coverage.H3CoverageCells
 import net.sagberg.kartoffel.coverage.PersistedCoverageLoader
 import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnostics
@@ -516,8 +516,15 @@ private fun MapRoute(
             }
         },
         map = { drawnRouteMap, mapPadding ->
+            val currentDrawnRouteMap by rememberUpdatedState(drawnRouteMap)
             GoogleMap(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawnRouteGestures(
+                        editable = drawnRouteMap.editable,
+                        interactions = { currentDrawnRouteMap },
+                        projection = { cameraPositionState.projection },
+                    ),
                 cameraPositionState = cameraPositionState,
                 contentPadding = mapPadding,
                 mapColorScheme = if (LocalDarkTheme.current) {
@@ -532,13 +539,7 @@ private fun MapRoute(
                     myLocationButtonEnabled = false,
                     zoomControlsEnabled = false,
                 ),
-                onMapClick = if (drawnRouteMap.editable) {
-                    { point ->
-                        drawnRouteMap.onMapClick(
-                            GeoCoordinate(point.latitude, point.longitude),
-                        )
-                    }
-                } else if (inspectionActive) {
+                onMapClick = if (inspectionActive && !drawnRouteMap.editable) {
                     { selectedInspectionCellId = null }
                 } else {
                     null
@@ -608,8 +609,10 @@ private fun MapRoute(
                 if (drawnRouteMap.active) {
                     drawnRouteMap.preview.cells.forEach { cell ->
                         Polygon(
-                            points = drawnRouteH3.boundaryOf(cell).map {
-                                LatLng(it.latitude, it.longitude)
+                            points = remember(cell) {
+                                drawnRouteH3.boundaryOf(cell).map {
+                                    LatLng(it.latitude, it.longitude)
+                                }
                             },
                             fillColor = if (cell.value in effectiveCoverageCellIds) {
                                 MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f)
@@ -632,11 +635,12 @@ private fun MapRoute(
                         )
                     }
                     drawnRouteMap.preview.waypoints.forEachIndexed { index, waypoint ->
-                        DraggableManualWaypoint(
-                            index = index,
-                            waypoint = waypoint,
-                            draggable = drawnRouteMap.editable,
-                            onDragEnd = { moved -> drawnRouteMap.onWaypointDragEnd(index, moved) },
+                        Marker(
+                            state = rememberUpdatedMarkerState(
+                                LatLng(waypoint.latitude, waypoint.longitude),
+                            ),
+                            contentDescription = "Route waypoint ${index + 1}",
+                            zIndex = 23f,
                         )
                     }
                 }
@@ -669,34 +673,6 @@ private fun CoverageOutlineStyle.paint(): CoverageOutlinePaint? {
             )
         }
     }
-}
-
-@Composable
-private fun DraggableManualWaypoint(
-    index: Int,
-    waypoint: GeoCoordinate,
-    draggable: Boolean,
-    onDragEnd: (GeoCoordinate) -> Unit,
-) {
-    val markerState = remember(index) { MarkerState(LatLng(waypoint.latitude, waypoint.longitude)) }
-    LaunchedEffect(waypoint) {
-        if (!markerState.isDragging) {
-            markerState.position = LatLng(waypoint.latitude, waypoint.longitude)
-        }
-    }
-    var wasDragging by remember { mutableStateOf(false) }
-    LaunchedEffect(markerState.isDragging) {
-        if (wasDragging && !markerState.isDragging) {
-            onDragEnd(GeoCoordinate(markerState.position.latitude, markerState.position.longitude))
-        }
-        wasDragging = markerState.isDragging
-    }
-    Marker(
-        state = markerState,
-        draggable = draggable,
-        contentDescription = "Route waypoint ${index + 1}",
-        zIndex = 23f,
-    )
 }
 
 private fun Context.hasForegroundLocationPermission(): Boolean =
