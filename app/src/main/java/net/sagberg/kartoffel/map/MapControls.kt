@@ -110,8 +110,6 @@ internal fun MapContent(
     onExitTrackingInspection: () -> Unit = {},
     onInspectionFilterChange: (TrackingInspectionFilter) -> Unit = {},
     onInspectionSortChange: (SampleSort) -> Unit = {},
-    selectedDrawnRouteId: Long? = null,
-    onSelectDrawnRoute: (Long?) -> Unit = {},
     onRemoveDrawnRoute: (Long) -> Unit = {},
     manualDrawingActive: Boolean = false,
     drawnRouteSaving: Boolean = false,
@@ -244,17 +242,17 @@ internal fun MapContent(
                         it.cells.isEmpty() && it.drawnRoutes.isEmpty()
                     } == true,
                     onFilterChange = onInspectionFilterChange,
-                    drawnRoutes = inspectionSnapshot?.drawnRoutes.orEmpty(),
-                    selectedDrawnRouteId = selectedDrawnRouteId,
-                    onSelectDrawnRoute = onSelectDrawnRoute,
-                    onRemoveDrawnRoute = onRemoveDrawnRoute,
                 )
             }
         }
 
         if (inspectionActive) {
-            inspectionSnapshot?.cells?.firstOrNull { it.cellId == selectedInspectionCellId }
-                ?.let { cell ->
+            selectedInspectionCellId?.let { cellId ->
+                val cell = inspectionSnapshot?.cells?.firstOrNull { it.cellId == cellId }
+                val routes = inspectionSnapshot?.drawnRoutes.orEmpty().filter { route ->
+                    route.cells.any { it.id == cellId.toString() }
+                }
+                if (cell != null || routes.isNotEmpty()) {
                     TrackingInspectionDetails(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -262,10 +260,14 @@ internal fun MapContent(
                             .padding(12.dp)
                             .fillMaxWidth(),
                         cell = cell,
+                        cellId = cellId,
+                        drawnRoutes = routes,
+                        onRemoveDrawnRoute = onRemoveDrawnRoute,
                         sort = inspectionSort,
                         onSortChange = onInspectionSortChange,
                     )
                 }
+            }
         } else {
             MapControls(
                 modifier = Modifier

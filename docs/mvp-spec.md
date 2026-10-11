@@ -61,6 +61,8 @@ Permissions are requested in context: foreground location for map/recording use,
 
 Tracking Diagnostics should make tuning decisions inspectable: sample source/trigger, the stored acceptance or rejection decision, accuracy, durable aggregate Coverage Evidence, meaningful Gaps, and useful battery signals available without heavy instrumentation. Because applied settings are not retained with samples, recording inspection does not reconstruct historical Inferred Coverage Evidence using current settings.
 
+Tracking Inspection shows all Drawn Routes alongside filtered tracking evidence. Selecting a cell with Drawn Coverage Evidence offers a Routes button with the number of routes covering that cell. Its route list supports removal after confirmation; other routes and tracking evidence remain intact.
+
 ## Implementation boundaries
 
 - Native Kotlin/Compose app targeting Android 16 only.
