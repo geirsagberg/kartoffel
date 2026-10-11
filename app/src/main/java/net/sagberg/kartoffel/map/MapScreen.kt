@@ -77,6 +77,7 @@ import net.sagberg.kartoffel.inspection.TrackingInspectionLoader
 import net.sagberg.kartoffel.inspection.TrackingInspectionSnapshot
 import net.sagberg.kartoffel.inspection.color
 import net.sagberg.kartoffel.settings.CoverageOutlineStyle
+import net.sagberg.kartoffel.settings.color
 import net.sagberg.kartoffel.storage.AutomaticTrackingPreference
 import net.sagberg.kartoffel.storage.AutomaticTrackingPreferences
 import net.sagberg.kartoffel.storage.DatabaseBackupManager
@@ -447,6 +448,7 @@ private fun MapRoute(
         menuActions = menuActions,
         hasLocationPermission = hasLocationPermission,
         isRecording = isRecording,
+        coverageOutline = coverageOutline,
         isAutomaticTrackingEnabled = automaticTrackingPreference.enabled,
         liveTrackingDiagnostics = liveTrackingDiagnostics,
         diagnosticsNowMillis = diagnosticsNowMillis,
@@ -642,21 +644,20 @@ private fun MapRoute(
 /** Outline colours follow Material roles in the current theme. */
 @Composable
 private fun CoverageOutlineStyle.paint(): CoverageOutlinePaint? {
-    val colors = MaterialTheme.colorScheme
+    val outlineColor = color()
     return when (this) {
         CoverageOutlineStyle.None -> null
-        CoverageOutlineStyle.Teal -> CoverageOutlinePaint(colors.primary.toArgb(), width = 2f)
+        CoverageOutlineStyle.Teal -> CoverageOutlinePaint(outlineColor.toArgb(), width = 2f)
         CoverageOutlineStyle.Graphite -> CoverageOutlinePaint(
-            color = colors.onSurface.copy(alpha = 0.9f).toArgb(),
+            color = outlineColor.toArgb(),
             width = 1.75f,
         )
         CoverageOutlineStyle.Halo -> {
-            val haloColor = if (LocalDarkTheme.current) colors.onSurface else colors.inverseOnSurface
             CoverageOutlinePaint(
-                color = haloColor.copy(alpha = 0.94f).toArgb(),
+                color = outlineColor.toArgb(),
                 width = 1.5f,
                 halo = CoverageOutlinePaint.Halo(
-                    color = haloColor.copy(alpha = 0.33f).toArgb(),
+                    color = outlineColor.copy(alpha = 0.33f).toArgb(),
                     width = 10f,
                     blurRadius = 5f,
                 ),

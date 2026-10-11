@@ -2,6 +2,7 @@ package net.sagberg.kartoffel.map
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,7 +74,9 @@ import net.sagberg.kartoffel.inspection.TrackingInspectionControls
 import net.sagberg.kartoffel.inspection.TrackingInspectionDetails
 import net.sagberg.kartoffel.inspection.TrackingInspectionFilter
 import net.sagberg.kartoffel.inspection.TrackingInspectionSnapshot
+import net.sagberg.kartoffel.settings.CoverageOutlineStyle
 import net.sagberg.kartoffel.tracking.RecordingActivity
+import net.sagberg.kartoffel.ui.RecordingBorder
 
 internal data class MapMenuActions(
     val onOpenSettings: () -> Unit = {},
@@ -87,6 +91,7 @@ internal fun MapContent(
     menuActions: MapMenuActions = MapMenuActions(),
     hasLocationPermission: Boolean,
     isRecording: Boolean,
+    coverageOutline: CoverageOutlineStyle = CoverageOutlineStyle.Teal,
     isAutomaticTrackingEnabled: Boolean = false,
     liveTrackingDiagnostics: LiveTrackingDiagnosticsState = LiveTrackingDiagnosticsState(),
     diagnosticsNowMillis: Long = System.currentTimeMillis(),
@@ -180,11 +185,12 @@ internal fun MapContent(
 
         Column(
             modifier = Modifier
-                .align(Alignment.TopCenter)
+                .align(Alignment.TopEnd)
+                .fillMaxWidth()
                 .onSizeChanged { topOverlayHeight = it.height }
                 .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             FloatingMapBar(
@@ -267,6 +273,7 @@ internal fun MapContent(
                 onStopRecording = onStopRecording,
             )
         }
+        RecordingBorder(isRecording, coverageOutline)
     }
 }
 
@@ -522,7 +529,7 @@ private fun LatestFixDiagnostics?.displayDecision(): String {
     return listOfNotNull(result, accuracy, reason).joinToString(" · ")
 }
 
-/** The floating, rounded bar over the Map holding its title and actions. */
+/** Expands from the menu button when the Map needs contextual actions. */
 @Composable
 private fun FloatingMapBar(
     menuActions: MapMenuActions,
@@ -540,11 +547,15 @@ private fun FloatingMapBar(
     onConfirmDrawnRoute: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val expanded = inspectionActive || manualDrawingActive
 
     Surface(
         modifier = Modifier
-            .widthIn(max = 560.dp)
-            .fillMaxWidth()
+            .animateContentSize(alignment = Alignment.TopEnd)
+            .then(
+                if (expanded) Modifier.widthIn(max = 560.dp).fillMaxWidth()
+                else Modifier.width(56.dp),
+            )
             .height(56.dp)
             .testTag("floating_map_bar"),
         shape = CircleShape,
@@ -552,21 +563,19 @@ private fun FloatingMapBar(
         shadowElevation = 4.dp,
     ) {
         Row(
-            modifier = Modifier.padding(start = 24.dp, end = 4.dp),
+            modifier = Modifier.padding(start = if (expanded) 24.dp else 4.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                modifier = Modifier.weight(1f),
-                text = when {
-                    inspectionActive -> "Tracking Inspection"
-                    manualDrawingActive -> "Draw route"
-                    else -> "Kartoffel"
-                },
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (expanded) {
+                Text(
+                    modifier = Modifier.weight(1f),
+                    text = if (inspectionActive) "Tracking Inspection" else "Draw route",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             when {
                 inspectionActive -> TextButton(
                     modifier = Modifier.testTag("exit_tracking_inspection"),

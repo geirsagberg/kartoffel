@@ -19,6 +19,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -102,12 +103,50 @@ class MapContentTest {
     }
 
     @Test
-    fun floatingBarShowsTheTitleWithoutRoutineTrackingStatus() {
+    fun floatingMenuLeavesTheMapFreeOfTheAppTitle() {
         compose.setMapContent(hasLocationPermission = true, isAutomaticTrackingEnabled = true)
 
-        compose.onNodeWithText("Kartoffel").assertIsDisplayed()
+        compose.onAllNodesWithText("Kartoffel").assertCountEquals(0)
+        compose.onNodeWithTag("floating_map_bar").assertWidthIsEqualTo(56.dp)
         compose.onNodeWithContentDescription("More options").assertIsDisplayed()
         compose.onAllNodesWithText("Automatic", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun menuGrowsIntoContextBarAndShrinksBackAtTheSameRightEdge() {
+        val inspecting = mutableStateOf(false)
+        val recording = mutableStateOf(false)
+        compose.setContent {
+            MaterialTheme {
+                MapContent(
+                    hasLocationPermission = true,
+                    isRecording = recording.value,
+                    inspectionActive = inspecting.value,
+                    onEnterTrackingInspection = { inspecting.value = true },
+                    onExitTrackingInspection = { inspecting.value = false },
+                    onRequestLocationPermission = {},
+                    onStartRecording = { recording.value = true },
+                    onStopRecording = { recording.value = false },
+                    onCenterCurrentLocation = {},
+                    map = { _, _ -> Box(Modifier.fillMaxSize()) },
+                )
+            }
+        }
+        val menu = compose.onNodeWithTag("floating_map_bar")
+        val rightEdge = menu.getUnclippedBoundsInRoot().right
+        compose.onAllNodesWithTag("recording_border").assertCountEquals(0)
+        compose.onNodeWithTag("recording_control").performClick()
+        compose.onNodeWithTag("recording_border").assertIsDisplayed()
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Tracking inspection").performClick()
+        compose.onNodeWithText("Tracking Inspection").assertIsDisplayed()
+        menu.assertWidthIsAtLeast(200.dp)
+        assertEquals(rightEdge, menu.getUnclippedBoundsInRoot().right)
+        compose.onNodeWithText("Exit").performClick()
+        menu.assertWidthIsEqualTo(56.dp)
+        assertEquals(rightEdge, menu.getUnclippedBoundsInRoot().right)
+        compose.onNodeWithTag("recording_control").performClick()
+        compose.onAllNodesWithTag("recording_border").assertCountEquals(0)
     }
 
     @Test
