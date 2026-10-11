@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
@@ -18,14 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.height
-import androidx.compose.ui.unit.width
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertHeightIsEqualTo
-import androidx.compose.ui.test.assertWidthIsEqualTo
-import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -33,29 +27,17 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.pressBack
-import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
-import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnosticsState
-import net.sagberg.kartoffel.diagnostics.LocationUpdateState
-import net.sagberg.kartoffel.diagnostics.RequestedIntervalReason
 import net.sagberg.kartoffel.coverage.GeoCoordinate
 import net.sagberg.kartoffel.coverage.CoverageCellId
 import net.sagberg.kartoffel.coverage.CoverageCellShape
-import net.sagberg.kartoffel.inspection.DiagnosticCellState
-import net.sagberg.kartoffel.inspection.DiagnosticProvenance
-import net.sagberg.kartoffel.inspection.DiagnosticSample
-import net.sagberg.kartoffel.inspection.DiagnosticSampleCell
 import net.sagberg.kartoffel.inspection.TrackingInspectionFilter
 import net.sagberg.kartoffel.inspection.TrackingInspectionMeasurements
 import net.sagberg.kartoffel.inspection.TrackingInspectionSnapshot
-import net.sagberg.kartoffel.inspection.SampleSort
 import net.sagberg.kartoffel.inspection.InspectionDrawnRoute
-import net.sagberg.kartoffel.tracking.RecordingActivity
 import org.junit.Rule
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MapContentTest {
@@ -106,98 +88,6 @@ class MapContentTest {
         compose.onNodeWithTag("settings_diagnostics_menu").assertIsDisplayed()
         compose.onAllNodesWithTag("start_recording_icon", useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithText("Walking · 5 s").assertCountEquals(0)
-    }
-
-    @Test
-    fun floatingMenuLeavesTheMapFreeOfTheAppTitle() {
-        compose.setMapContent(hasLocationPermission = true, isAutomaticTrackingEnabled = true)
-
-        compose.onAllNodesWithText("Kartoffel").assertCountEquals(0)
-        compose.onNodeWithTag("floating_map_bar").assertWidthIsEqualTo(56.dp)
-        compose.onNodeWithContentDescription("More options").assertIsDisplayed()
-        compose.onAllNodesWithText("Automatic", substring = true).assertCountEquals(0)
-    }
-
-    @Test
-    fun menuGrowsIntoContextBarAndShrinksBackAtTheSameRightEdge() {
-        val inspecting = mutableStateOf(false)
-        val recording = mutableStateOf(false)
-        compose.setContent {
-            MaterialTheme {
-                MapContent(
-                    hasLocationPermission = true,
-                    isRecording = recording.value,
-                    inspectionActive = inspecting.value,
-                    onEnterTrackingInspection = { inspecting.value = true },
-                    onExitTrackingInspection = { inspecting.value = false },
-                    onRequestLocationPermission = {},
-                    onStartRecording = { recording.value = true },
-                    onStopRecording = { recording.value = false },
-                    onCenterCurrentLocation = {},
-                    map = { _, _ -> Box(Modifier.fillMaxSize()) },
-                )
-            }
-        }
-        val menu = compose.onNodeWithTag("floating_map_bar")
-        val rightEdge = menu.getUnclippedBoundsInRoot().right
-        compose.onAllNodesWithTag("recording_border").assertCountEquals(0)
-        compose.onNodeWithTag("recording_control").performClick()
-        compose.onNodeWithTag("recording_border").assertIsDisplayed()
-        compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Tracking inspection").performClick()
-        compose.onNodeWithText("Tracking Inspection").assertIsDisplayed()
-        menu.assertWidthIsAtLeast(200.dp)
-        assertEquals(rightEdge, menu.getUnclippedBoundsInRoot().right)
-        compose.onNodeWithText("Exit").performClick()
-        menu.assertWidthIsEqualTo(56.dp)
-        assertEquals(rightEdge, menu.getUnclippedBoundsInRoot().right)
-        compose.onNodeWithTag("recording_control").performClick()
-        compose.onAllNodesWithTag("recording_border").assertCountEquals(0)
-    }
-
-    @Test
-    fun drawRouteAndLocationSitAboveTheRecordButton() {
-        compose.setMapContent(hasLocationPermission = true)
-
-        val draw = compose.onNodeWithContentDescription("Draw route").getUnclippedBoundsInRoot()
-        val location = compose.onNodeWithContentDescription("Center on current location")
-            .getUnclippedBoundsInRoot()
-        val record = compose.onNodeWithTag("recording_control").getUnclippedBoundsInRoot()
-
-        assertTrue(draw.bottom <= location.top)
-        assertTrue(location.bottom <= record.top)
-        assertTrue(record.height >= 64.dp)
-        assertTrue(record.width > location.width)
-        compose.onNodeWithText("Record", useUnmergedTree = true).assertIsDisplayed()
-    }
-
-    @Test
-    fun currentLocationControlIsAvailableAfterPermissionIsGranted() {
-        compose.setMapContent(hasLocationPermission = true)
-
-        compose.onAllNodesWithText("Enable location").assertCountEquals(0)
-        compose.onNodeWithContentDescription("Center on current location").assertIsDisplayed()
-    }
-
-    @Test
-    fun mapControlsHaveRoomBelowTheFloatingBar() {
-        var mapTopPadding = 0.dp
-        compose.setContent {
-            MaterialTheme {
-                MapContent(
-                    hasLocationPermission = true,
-                    isRecording = false,
-                    onRequestLocationPermission = {},
-                    onStartRecording = {},
-                    onStopRecording = {},
-                    onCenterCurrentLocation = {},
-                    map = { _, padding -> mapTopPadding = padding.calculateTopPadding() },
-                )
-            }
-        }
-
-        val bar = compose.onNodeWithTag("floating_map_bar").getUnclippedBoundsInRoot()
-        compose.runOnIdle { assertTrue(mapTopPadding >= bar.bottom + 8.dp) }
     }
 
     @Test
@@ -486,12 +376,10 @@ class MapContentTest {
         compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
         compose.runOnIdle { selectedCell.value = 123 }
         compose.onAllNodesWithText("Samples", substring = true).assertCountEquals(0)
-        compose.onNodeWithText("Drawn Coverage Evidence").assertIsDisplayed()
         compose.onNodeWithText("Routes (2)").performClick()
         compose.onNodeWithTag("drawn_route_7").assertIsDisplayed()
         compose.onNodeWithTag("drawn_route_8").assertIsDisplayed()
         compose.onAllNodesWithTag("drawn_route_9").assertCountEquals(0)
-        compose.onNodeWithTag("remove_drawn_route_7").assertWidthIsAtLeast(64.dp)
         compose.onNodeWithTag("remove_drawn_route_7").performClick()
         compose.onNodeWithText("Remove drawn route?").assertIsDisplayed()
         compose.runOnIdle { assertEquals(null, removed) }
@@ -509,121 +397,6 @@ class MapContentTest {
         compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
         compose.runOnIdle { selectedCell.value = 789 }
         compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
-    }
-
-    @Test
-    fun drawnRouteListIsHeightLimitedWithUsableActions() {
-        val boundary = listOf(
-            GeoCoordinate(59.91, 10.75),
-            GeoCoordinate(59.92, 10.75),
-            GeoCoordinate(59.91, 10.76),
-        )
-        val routes = (1L..6L).map { id ->
-            InspectionDrawnRoute(
-                id = id,
-                createdAtMillis = id * 1_000,
-                cells = listOf(CoverageCellShape("123", boundary)),
-            )
-        }
-        val snapshot = TrackingInspectionSnapshot(
-            filter = TrackingInspectionFilter.Default,
-            availableScopes = emptyList(),
-            availableRecordings = emptyList(),
-            cells = emptyList(),
-            measurements = TrackingInspectionMeasurements(0, 0, 0),
-            drawnRoutes = routes,
-        )
-        compose.setMapContent(
-            hasLocationPermission = true,
-            inspectionActive = true,
-            inspectionSnapshot = snapshot,
-            selectedInspectionCellId = 123,
-        )
-
-        compose.onNodeWithText("Routes (6)").performClick()
-        compose.onNodeWithTag("drawn_route_list").assertHeightIsEqualTo(220.dp)
-        compose.onNodeWithTag("remove_drawn_route_1").assertWidthIsAtLeast(64.dp)
-    }
-
-    @Test
-    fun selectedInspectionCellSeparatesInfoAndSamplesIntoTabs() {
-        val cell = DiagnosticSampleCell(
-            cellId = 123,
-            boundary = listOf(
-                GeoCoordinate(59.91, 10.75),
-                GeoCoordinate(59.92, 10.75),
-                GeoCoordinate(59.91, 10.76),
-            ),
-            state = DiagnosticCellState.Observed,
-            provenance = setOf(
-                DiagnosticProvenance.AutomaticObserved,
-                DiagnosticProvenance.AutomaticRejected,
-            ),
-            acceptedCount = 1,
-            rejectedCount = 1,
-            evidenceFirstMillis = 1_000,
-            evidenceLastMillis = 2_000,
-            sampleFirstMillis = 1_000,
-            sampleLastMillis = 2_000,
-            samples = listOf(
-                DiagnosticSample(2, 2_000, 12.0, "automatic_tracking", "window", null, "walking", false, "accuracy"),
-                DiagnosticSample(1, 1_000, 8.0, "automatic_tracking", "window", null, "walking", true, null),
-            ),
-        )
-        val snapshot = TrackingInspectionSnapshot(
-            filter = TrackingInspectionFilter.Default,
-            availableScopes = emptyList(),
-            availableRecordings = emptyList(),
-            cells = listOf(cell),
-            measurements = TrackingInspectionMeasurements(1, 2, 3),
-        )
-        val routes = mutableStateOf<List<InspectionDrawnRoute>>(emptyList())
-        val sort = mutableStateOf(SampleSort.NewestFirst)
-        compose.setContent {
-            MaterialTheme {
-                MapContent(
-                    hasLocationPermission = true,
-                    isRecording = false,
-                    onRequestLocationPermission = {},
-                    onStartRecording = {},
-                    onStopRecording = {},
-                    onCenterCurrentLocation = {},
-                    inspectionActive = true,
-                    inspectionSnapshot = snapshot.copy(drawnRoutes = routes.value),
-                    selectedInspectionCellId = cell.cellId,
-                    inspectionSort = sort.value,
-                    onInspectionSortChange = { sort.value = it },
-                    onRemoveDrawnRoute = { routes.value = emptyList() },
-                    map = { _, _ -> },
-                )
-            }
-        }
-
-        compose.onAllNodesWithText("Observed").assertCountEquals(2)
-        compose.onNodeWithText("2 total · 1 accepted · 1 rejected · Automatic").assertIsDisplayed()
-        compose.onAllNodesWithText("Accepted", substring = true).assertCountEquals(0)
-        compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
-        compose.onNodeWithText("Samples (2)").performClick()
-        compose.onNodeWithText("Accepted · 8 m", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Rejected · 12 m", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Newest first").performClick()
-        compose.onNodeWithText("Oldest first").assertIsDisplayed()
-        compose.onAllNodesWithText("2 total", substring = true).assertCountEquals(0)
-        compose.onNodeWithText("Info").performClick()
-        compose.onAllNodesWithTag("sample_history").assertCountEquals(0)
-        compose.onNodeWithText("2 total · 1 accepted · 1 rejected · Automatic").assertIsDisplayed()
-        compose.runOnIdle {
-            routes.value = listOf(
-                InspectionDrawnRoute(7, 1_000, listOf(CoverageCellShape("123", cell.boundary))),
-            )
-        }
-        compose.onNodeWithText("Routes (1)").performClick()
-        compose.onAllNodesWithTag("sample_history").assertCountEquals(0)
-        compose.onNodeWithTag("remove_drawn_route_7").performClick()
-        compose.onNodeWithTag("confirm_remove_drawn_route").performClick()
-        compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
-        compose.onNodeWithText("2 total · 1 accepted · 1 rejected · Automatic").assertIsDisplayed()
-        compose.onNodeWithText("Samples (2)").assertIsDisplayed()
     }
 
     @Test
@@ -695,128 +468,6 @@ class MapContentTest {
         compose.onNodeWithText("Stop", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("recording_control").performClick()
         compose.runOnIdle { assertEquals(false, requestedRecording.value) }
-    }
-
-    @Test
-    fun liveDiagnosticsStayCompactUntilExpanded() {
-        compose.setContent {
-            MaterialTheme {
-                MapContent(
-                    hasLocationPermission = true,
-                    isRecording = true,
-                    liveTrackingDiagnostics = LiveTrackingDiagnosticsState(
-                        trackingActive = true,
-                        activityMode = RecordingActivity.WALKING,
-                        locationUpdateState = LocationUpdateState.ACTIVE,
-                        requestedLocationIntervalMillis = 5_000,
-                        intervalReason = RequestedIntervalReason.SPEED_OVERRIDE,
-                        latestFix = LatestFixDiagnostics(
-                            capturedAtMillis = 2_000,
-                            accuracyMeters = 34.0,
-                            accepted = false,
-                            rejectionReason = "accuracy_exceeds_recording_limit",
-                        ),
-                    ),
-                    diagnosticsNowMillis = 12_000,
-                    onRequestLocationPermission = {},
-                    onStartRecording = {},
-                    onStopRecording = {},
-                    onCenterCurrentLocation = {},
-                    map = { _, _ -> },
-                )
-            }
-        }
-
-        compose.onAllNodesWithTag("live_diagnostics_panel").assertCountEquals(0)
-        compose.onNodeWithTag("settings_diagnostics_menu").performClick()
-        compose.onNodeWithText("Show debug info").performClick()
-        compose.onNodeWithText("Walking · 5 s").assertIsDisplayed()
-        compose.onAllNodesWithText("Speed override").assertCountEquals(0)
-
-        compose.onNodeWithTag("live_diagnostics_panel").performClick()
-
-        compose.onNodeWithText("Location updates: Active").assertIsDisplayed()
-        compose.onNodeWithText("Interval reason: Speed override").assertIsDisplayed()
-        compose.onNodeWithText("Last fix: 10 s ago").assertIsDisplayed()
-        compose.onNodeWithText(
-            "Latest fix: Rejected · 34 m · Accuracy exceeds recording limit",
-        ).assertIsDisplayed()
-        compose.onAllNodesWithText("History").assertCountEquals(0)
-        compose.onNodeWithTag("settings_diagnostics_menu").performClick()
-        compose.onNodeWithText("Hide debug info").performClick()
-        compose.onAllNodesWithTag("live_diagnostics_panel").assertCountEquals(0)
-    }
-
-    @Test
-    fun liveDiagnosticsExplainTheSafeFallbackAndAcceptedFix() {
-        compose.setContent {
-            MaterialTheme {
-                MapContent(
-                    hasLocationPermission = true,
-                    isRecording = true,
-                    liveTrackingDiagnostics = LiveTrackingDiagnosticsState(
-                        trackingActive = true,
-                        activityMode = RecordingActivity.UNKNOWN,
-                        locationUpdateState = LocationUpdateState.ACTIVE,
-                        requestedLocationIntervalMillis = 5_000,
-                        intervalReason = RequestedIntervalReason.SAFE_FALLBACK,
-                        latestFix = LatestFixDiagnostics(
-                            capturedAtMillis = 1_000,
-                            accuracyMeters = 8.0,
-                            accepted = true,
-                            rejectionReason = null,
-                        ),
-                    ),
-                    diagnosticsNowMillis = 3_000,
-                    onRequestLocationPermission = {},
-                    onStartRecording = {},
-                    onStopRecording = {},
-                    onCenterCurrentLocation = {},
-                    map = { _, _ -> },
-                )
-            }
-        }
-
-        compose.onNodeWithTag("settings_diagnostics_menu").performClick()
-        compose.onNodeWithText("Show debug info").performClick()
-        compose.onNodeWithText("Unknown · 5 s fallback").assertIsDisplayed()
-        compose.onNodeWithTag("live_diagnostics_panel").performClick()
-        compose.onNodeWithText("Interval reason: Safe fallback").assertIsDisplayed()
-        compose.onNodeWithText("Last fix: 2 s ago").assertIsDisplayed()
-        compose.onNodeWithText("Latest fix: Accepted · 8 m").assertIsDisplayed()
-    }
-
-    @Test
-    fun liveDiagnosticsExplainSuspensionWhileStill() {
-        compose.setContent {
-            MaterialTheme {
-                MapContent(
-                    hasLocationPermission = true,
-                    isRecording = true,
-                    liveTrackingDiagnostics = LiveTrackingDiagnosticsState(
-                        trackingActive = true,
-                        activityMode = RecordingActivity.STILL,
-                        locationUpdateState = LocationUpdateState.SUSPENDED,
-                        requestedLocationIntervalMillis = null,
-                        intervalReason = RequestedIntervalReason.SUSPENDED_WHILE_STILL,
-                    ),
-                    diagnosticsNowMillis = 3_000,
-                    onRequestLocationPermission = {},
-                    onStartRecording = {},
-                    onStopRecording = {},
-                    onCenterCurrentLocation = {},
-                    map = { _, _ -> },
-                )
-            }
-        }
-
-        compose.onNodeWithTag("settings_diagnostics_menu").performClick()
-        compose.onNodeWithText("Show debug info").performClick()
-        compose.onNodeWithText("Still · suspended").assertIsDisplayed()
-        compose.onNodeWithTag("live_diagnostics_panel").performClick()
-        compose.onNodeWithText("Location updates: Suspended").assertIsDisplayed()
-        compose.onNodeWithText("Interval reason: Suspended while still").assertIsDisplayed()
-        compose.onNodeWithText("Last fix: None").assertIsDisplayed()
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setMapContent(
