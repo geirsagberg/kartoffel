@@ -1,16 +1,19 @@
 package net.sagberg.kartoffel.prototype
 
-// PROTOTYPE (throwaway, issue #34): synthetic Oslo coverage and a fog tile provider with
-// prototype-only colour, feather, tint and edge parameters. Never reads location history.
+// PROTOTYPE (throwaway, issue #34): synthetic Oslo coverage and a fog tile provider that draws
+// the production Fog colour plus a prototype-only outline around visited coverage.
+// Never reads location history.
 
 import android.graphics.BlurMaskFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withClip
 import com.google.android.gms.maps.model.Tile
 import com.google.android.gms.maps.model.TileProvider
 import java.io.ByteArrayOutputStream
@@ -25,13 +28,16 @@ import net.sagberg.kartoffel.map.hasValidY
 import net.sagberg.kartoffel.map.latLngBounds
 import net.sagberg.kartoffel.map.pixelForCoordinate
 
-internal data class PrototypeFogStyle(
-    val fog: Int,
-    val featherPx: Float = 0f,
-    val revealTint: Int? = null,
-    val edgeColor: Int? = null,
-    val edgeWidthPx: Float = 0f,
-)
+// Same as the production FogTileRenderer default, used in both light and dark.
+private val ProductionFog = Color.argb(185, 24, 29, 36)
+
+internal enum class Outline(val key: String, val title: String) {
+    None("none", "none"),
+    Teal("teal", "teal line"),
+    Graphite("graphite", "graphite line"),
+    Halo("halo", "white halo"),
+    Glow("glow", "teal + inner glow"),
+}
 
 internal object SyntheticOsloCoverage {
     val here = GeoCoordinate(59.9136, 10.7400)
@@ -67,12 +73,17 @@ internal object SyntheticOsloCoverage {
 
 internal class PrototypeFogTileProvider(
     private val coverage: CoverageSnapshot,
-    private val fog: PrototypeFogStyle,
+    private val outline: Outline,
+    private val dark: Boolean,
 ) : TileProvider {
+    // Light and dark mirror KartoffelTheme primary.
+    private val teal = if (dark) Color.rgb(0x72, 0xDB, 0xBC) else Color.rgb(0x00, 0x6B, 0x57)
+
     override fun getTile(x: Int, y: Int, zoom: Int): Tile {
         val tile = FogTileCoordinate(x, y, zoom)
         if (!tile.hasValidY()) return TileProvider.NO_TILE
         val b = tile.latLngBounds()
+        // Padding keeps strokes and glows continuous across tile seams.
         val padLat = (b.north - b.south) * 0.25
         val padLng = (b.east - b.west) * 0.25
         val cells = coverage.cellsIntersecting(
@@ -81,41 +92,15 @@ internal class PrototypeFogTileProvider(
 
         val bitmap = createBitmap(FOG_TILE_SIZE, FOG_TILE_SIZE)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(fog.fog)
+        canvas.drawColor(ProductionFog)
         if (cells.isNotEmpty()) {
             val union = Path()
             cells.forEach { union.op(it.toPath(tile), Path.Op.UNION) }
             canvas.drawPath(
                 union,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
-                    if (fog.featherPx > 0f) {
-                        maskFilter = BlurMaskFilter(fog.featherPx, BlurMaskFilter.Blur.NORMAL)
-                    }
-                },
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) },
             )
-            fog.revealTint?.let { tint ->
-                canvas.drawPath(
-                    union,
-                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = tint
-                        if (fog.featherPx > 0f) {
-                            maskFilter = BlurMaskFilter(fog.featherPx, BlurMaskFilter.Blur.NORMAL)
-                        }
-                    },
-                )
-            }
-            fog.edgeColor?.let { edge ->
-                canvas.drawPath(
-                    union,
-                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = edge
-                        style = Paint.Style.STROKE
-                        strokeWidth = fog.edgeWidthPx
-                        strokeJoin = Paint.Join.ROUND
-                    },
-                )
-            }
+            drawOutline(canvas, union)
         }
         val bytes = ByteArrayOutputStream().use { output ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
@@ -123,6 +108,40 @@ internal class PrototypeFogTileProvider(
             output.toByteArray()
         }
         return Tile(FOG_TILE_SIZE, FOG_TILE_SIZE, bytes)
+    }
+
+    private fun drawOutline(canvas: Canvas, union: Path) {
+        fun stroke(color: Int, width: Float, blur: Float = 0f) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            style = Paint.Style.STROKE
+            strokeWidth = width
+            strokeJoin = Paint.Join.MITER
+            if (blur > 0f) maskFilter = BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL)
+        }
+        val outside = Path(union).apply { fillType = Path.FillType.INVERSE_WINDING }
+        when (outline) {
+            Outline.None -> Unit
+            Outline.Teal -> canvas.drawPath(union, stroke(teal, 2f))
+            Outline.Graphite -> {
+                // A neutral line that follows the mode: near-black on the light map, pale grey on dark.
+                val ink = if (dark) Color.argb(230, 0xC8, 0xD0, 0xD6) else Color.argb(235, 0x1E, 0x24, 0x2A)
+                canvas.drawPath(union, stroke(ink, if (dark) 1.5f else 1.75f))
+            }
+            Outline.Halo -> {
+                // Soft light bleed into the fog, then a crisp white edge.
+                canvas.withClip(outside) {
+                    drawPath(union, stroke(Color.argb(if (dark) 90 else 80, 255, 255, 255), 10f, blur = 5f))
+                }
+                canvas.drawPath(union, stroke(Color.argb(240, 255, 255, 255), 1.5f))
+            }
+            Outline.Glow -> {
+                // Teal light just inside the visited area, then a crisp teal edge.
+                canvas.withClip(union) {
+                    drawPath(union, stroke(Color.argb(if (dark) 60 else 70, Color.red(teal), Color.green(teal), Color.blue(teal)), 12f, blur = 5f))
+                }
+                canvas.drawPath(union, stroke(teal, 1.5f))
+            }
+        }
     }
 
     private fun CoverageCellShape.toPath(tile: FogTileCoordinate): Path = Path().apply {
