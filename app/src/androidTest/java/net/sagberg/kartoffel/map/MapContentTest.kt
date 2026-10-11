@@ -7,6 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
@@ -202,19 +207,70 @@ class MapContentTest {
     }
 
     @Test
-    fun drawingSupportsMapEditsUndoCancelBackConfirmAndActiveRecording() {
-        val drawingActive = mutableStateOf(false)
-        val preview = mutableStateOf(DrawnRoutePreview())
-        val routeDrawing = RouteDrawing(pathBetween = { _, destination ->
-            if (destination.latitude >= 3.0) {
-                listOf(CoverageCellId(9), CoverageCellId(10))
-            } else {
-                listOf(CoverageCellId(1), CoverageCellId(2))
+    fun savingDisablesDrawingControlsAndBackUntilConfirmationFinishes() {
+        val finishSave = CompletableDeferred<Long>()
+        val editor = DrawnRouteEditor(
+            pathBetween = { _, _ -> listOf(CoverageCellId(1)) },
+            saveRoute = { finishSave.await() },
+        )
+        editor.enter()
+        editor.add(GeoCoordinate(1.0, 1.0))
+        editor.add(GeoCoordinate(2.0, 2.0))
+        var editable = true
+        compose.setContent {
+            val state by editor.state.collectAsState()
+            val scope = rememberCoroutineScope()
+            MaterialTheme {
+                MapContent(
+                    hasLocationPermission = true,
+                    isRecording = false,
+                    onRequestLocationPermission = {},
+                    onStartRecording = {},
+                    onStopRecording = {},
+                    onCenterCurrentLocation = {},
+                    manualDrawingActive = state.active,
+                    drawnRouteSaving = state.saving,
+                    drawnRoutePreview = state.preview,
+                    onUndoManualWaypoint = editor::undo,
+                    onCancelManualDrawing = editor::cancel,
+                    onConfirmDrawnRoute = { scope.launch { editor.confirm() } },
+                    map = { interactions, _ -> editable = interactions.editable },
+                )
             }
-        })
+        }
+
+        compose.onNodeWithText("Confirm").performClick()
+        compose.onNodeWithText("Confirm").assertIsNotEnabled()
+        compose.onNodeWithText("Undo").assertIsNotEnabled()
+        compose.onNodeWithText("Cancel").assertIsNotEnabled()
+        pressBack()
+        compose.onNodeWithText("Discard route?").assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(false, editable)
+            assertEquals(true, editor.state.value.saving)
+            finishSave.complete(1L)
+        }
+        compose.waitUntil { !editor.state.value.active }
+        compose.onNodeWithContentDescription("Draw route").assertIsDisplayed()
+    }
+
+    @Test
+    fun drawingSupportsMapEditsUndoCancelBackConfirmAndActiveRecording() {
         var confirmed = false
+        val editor = DrawnRouteEditor(
+            pathBetween = { _, destination ->
+                if (destination.latitude >= 3.0) {
+                    listOf(CoverageCellId(9), CoverageCellId(10))
+                } else {
+                    listOf(CoverageCellId(1), CoverageCellId(2))
+                }
+            },
+            saveRoute = { confirmed = true; 1L },
+        )
         var stoppedRecording = false
         compose.setContent {
+            val state by editor.state.collectAsState()
+            val scope = rememberCoroutineScope()
             MaterialTheme {
                 MapContent(
                     hasLocationPermission = true,
@@ -223,25 +279,15 @@ class MapContentTest {
                     onStartRecording = {},
                     onStopRecording = { stoppedRecording = true },
                     onCenterCurrentLocation = {},
-                    manualDrawingActive = drawingActive.value,
-                    drawnRoutePreview = preview.value,
-                    onEnterManualDrawing = { drawingActive.value = true },
-                    onUndoManualWaypoint = {
-                        preview.value = routeDrawing.undo(preview.value)
-                    },
-                    onAddManualWaypoint = { preview.value = routeDrawing.add(preview.value, it) },
-                    onMoveManualWaypoint = { index, waypoint ->
-                        preview.value = routeDrawing.move(preview.value, index, waypoint)
-                    },
-                    onCancelManualDrawing = {
-                        drawingActive.value = false
-                        preview.value = DrawnRoutePreview()
-                    },
-                    onConfirmDrawnRoute = {
-                        confirmed = true
-                        drawingActive.value = false
-                        preview.value = DrawnRoutePreview()
-                    },
+                    manualDrawingActive = state.active,
+                    drawnRouteSaving = state.saving,
+                    drawnRoutePreview = state.preview,
+                    onEnterManualDrawing = editor::enter,
+                    onUndoManualWaypoint = editor::undo,
+                    onAddManualWaypoint = editor::add,
+                    onMoveManualWaypoint = editor::move,
+                    onCancelManualDrawing = editor::cancel,
+                    onConfirmDrawnRoute = { scope.launch { editor.confirm() } },
                     map = { interactions, _ ->
                         // Centred so that the floating bar over the map does not cover them.
                         Column(Modifier.align(Alignment.Center)) {
@@ -283,7 +329,7 @@ class MapContentTest {
         compose.onNodeWithTag("route_polyline_preview").assertIsDisplayed()
         compose.onNodeWithTag("fake_waypoint_drag_end").performClick()
         compose.runOnIdle {
-            assertEquals(listOf(9L, 10L), preview.value.cells.map { it.value })
+            assertEquals(listOf(9L, 10L), editor.state.value.preview.cells.map { it.value })
         }
         compose.onNodeWithText("Undo").performClick()
         compose.onNodeWithText("Undo").performClick()
@@ -292,11 +338,11 @@ class MapContentTest {
 
         compose.onNodeWithTag("fake_map_tap").performClick()
         compose.onNodeWithText("Cancel").performClick()
-        compose.runOnIdle { assertEquals(DrawnRoutePreview(), preview.value) }
+        compose.runOnIdle { assertEquals(DrawnRoutePreview(), editor.state.value.preview) }
 
         compose.onNodeWithContentDescription("Draw route").performClick()
         pressBack()
-        compose.runOnIdle { assertEquals(false, drawingActive.value) }
+        compose.runOnIdle { assertEquals(false, editor.state.value.active) }
         compose.onAllNodesWithText("Discard route?").assertCountEquals(0)
 
         compose.onNodeWithContentDescription("Draw route").performClick()
@@ -306,7 +352,7 @@ class MapContentTest {
         compose.onNodeWithText("Keep drawing").performClick()
         pressBack()
         compose.onNodeWithText("Discard").performClick()
-        compose.runOnIdle { assertEquals(false, drawingActive.value) }
+        compose.runOnIdle { assertEquals(false, editor.state.value.active) }
 
         compose.onNodeWithContentDescription("Draw route").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
@@ -316,7 +362,7 @@ class MapContentTest {
         compose.onNodeWithText("Confirm").performClick()
         compose.runOnIdle { assertEquals(true, confirmed) }
         compose.onAllNodesWithText("Undo").assertCountEquals(0)
-        compose.runOnIdle { assertEquals(DrawnRoutePreview(), preview.value) }
+        compose.runOnIdle { assertEquals(DrawnRoutePreview(), editor.state.value.preview) }
     }
 
     @Test
