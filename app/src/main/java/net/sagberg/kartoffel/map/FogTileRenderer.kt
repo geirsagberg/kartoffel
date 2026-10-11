@@ -17,17 +17,17 @@ import androidx.core.graphics.createBitmap
 internal data class CoverageOutlinePaint(
     val color: Int,
     val width: Float,
-    val glow: Glow? = null,
+    val halo: Halo? = null,
 ) {
     /** A soft band drawn on the Fog side of the line only. */
-    data class Glow(
+    data class Halo(
         val color: Int,
         val width: Float,
         val blurRadius: Float,
     )
 
     /** How far the outline can reach beyond a cell's edge into a neighbouring tile. */
-    val reachPixels: Float get() = maxOf(width, glow?.let { it.width + it.blurRadius } ?: 0f)
+    val reachPixels: Float get() = maxOf(width, halo?.let { it.width + it.blurRadius } ?: 0f)
 }
 
 internal class FogTileRenderer(
@@ -61,13 +61,13 @@ internal class FogTileRenderer(
 
         val outlined = outline?.let { paint -> paint to coverageOutline(cellsToClear).toTilePath(tile) }
 
-        // Drawn before clearing so that the glow only remains on the Fog side of the edge.
+        // Drawn before clearing so that the halo only remains on the Fog side of the edge.
         outlined?.let { (paint, path) ->
-            paint.glow?.let { glow ->
+            paint.halo?.let { halo ->
                 canvas.drawPath(
                     path,
-                    outlineStroke(glow.color, glow.width).apply {
-                        maskFilter = BlurMaskFilter(glow.blurRadius, BlurMaskFilter.Blur.NORMAL)
+                    outlineStroke(halo.color, halo.width).apply {
+                        maskFilter = BlurMaskFilter(halo.blurRadius, BlurMaskFilter.Blur.NORMAL)
                     },
                 )
             }

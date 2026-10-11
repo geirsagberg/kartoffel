@@ -3,24 +3,35 @@ package net.sagberg.kartoffel.map
 import com.google.android.gms.maps.model.Tile
 import com.google.android.gms.maps.model.TileProvider
 import java.util.concurrent.atomic.AtomicReference
+import net.sagberg.kartoffel.coverage.CoverageCellShape
 import net.sagberg.kartoffel.coverage.CoverageSnapshot
 
 internal class FogTileProvider(
     initialCoverage: CoverageSnapshot,
-    initialOutline: CoverageOutlinePaint? = null,
+    private val renderPng: (FogTileRenderer, FogTileCoordinate, List<CoverageCellShape>) -> ByteArray =
+        FogTileRenderer::renderPng,
 ) : TileProvider {
-    private val coverage = AtomicReference(initialCoverage)
-    private val renderer = AtomicReference(FogTileRenderer(outline = initialOutline))
+    private data class RenderState(
+        val coverage: CoverageSnapshot,
+        val renderer: FogTileRenderer,
+    )
+
+    private val state = AtomicReference(RenderState(initialCoverage, FogTileRenderer()))
 
     fun updateCoverage(snapshot: CoverageSnapshot) {
-        coverage.set(snapshot)
+        state.updateAndGet { it.copy(coverage = snapshot) }
     }
 
     /** Returns whether the outline changed, in which case cached tiles are stale. */
     fun updateOutline(outline: CoverageOutlinePaint?): Boolean {
-        if (renderer.get().outline == outline) return false
-        renderer.set(FogTileRenderer(outline = outline))
-        return true
+        val previous = state.getAndUpdate {
+            if (it.renderer.outline == outline) {
+                it
+            } else {
+                it.copy(renderer = FogTileRenderer(outline = outline))
+            }
+        }
+        return previous.renderer.outline != outline
     }
 
     override fun getTile(
@@ -33,15 +44,15 @@ internal class FogTileProvider(
             if (!tile.hasValidY()) {
                 TileProvider.NO_TILE
             } else {
-                val renderer = renderer.get()
+                val renderingState = state.get()
+                val renderer = renderingState.renderer
                 val reach = renderer.outline?.reachPixels?.toDouble() ?: 0.0
-                val visibleCells = coverage.get().cellsIntersecting(tile.latLngBounds(reach))
-                val bytes = renderer.renderPng(
-                    tile = tile,
-                    cellsToClear = visibleCells,
-                )
+                val visibleCells = renderingState.coverage.cellsIntersecting(tile.latLngBounds(reach))
+                val bytes = renderPng(renderer, tile, visibleCells)
 
-                Tile(FOG_TILE_SIZE, FOG_TILE_SIZE, bytes)
+                // An in-flight tile may finish after the overlay's cache has been cleared.
+                // Returning null asks Maps to retry instead of caching an obsolete tile.
+                if (state.get() !== renderingState) null else Tile(FOG_TILE_SIZE, FOG_TILE_SIZE, bytes)
             }
         } catch (failure: Exception) {
             when (fogTileFailureHandlingFor(failure)) {

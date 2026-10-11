@@ -3,6 +3,7 @@ package net.sagberg.kartoffel.coverage
 import com.uber.h3core.H3Core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class H3CoverageCellsTest {
@@ -26,6 +27,15 @@ class H3CoverageCellsTest {
         assertTrue(boundary.size >= 5)
         assertTrue(boundary.all { it.latitude in -90.0..90.0 })
         assertTrue(boundary.all { it.longitude in -180.0..180.0 })
+    }
+
+    @Test
+    fun rejectsShapesOutsideTheStreetLevelResolution() {
+        val coarseCell = CoverageCellId(h3.latLngToCell(59.9109, 10.7522, 9))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            coverageCells.shapeOf(coarseCell)
+        }
     }
 
     @Test

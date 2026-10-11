@@ -1,5 +1,8 @@
 package net.sagberg.kartoffel
 
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -52,7 +55,11 @@ class KartoffelAppTest {
 
     @Test
     fun appearanceChoicesApplyAndAreKeptOnTheDevice() {
-        compose.setContent { KartoffelApp() }
+        lateinit var activity: ComponentActivity
+        compose.setContent {
+            activity = LocalActivity.current as ComponentActivity
+            KartoffelApp()
+        }
 
         compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Appearance").performClick()
@@ -60,6 +67,11 @@ class KartoffelAppTest {
         compose.onNodeWithText("Teal").assertIsSelected()
 
         compose.onNodeWithText("Dark").performClick()
+        compose.runOnIdle {
+            val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+            assertEquals(false, bars.isAppearanceLightStatusBars)
+            assertEquals(false, bars.isAppearanceLightNavigationBars)
+        }
         compose.onNodeWithText("Halo").performClick()
         compose.onNodeWithText("Done").performClick()
 
@@ -73,5 +85,11 @@ class KartoffelAppTest {
         compose.onNodeWithText("Appearance").performClick()
         compose.onNodeWithText("Dark").assertIsSelected()
         compose.onNodeWithText("Halo").assertIsSelected()
+        compose.onNodeWithText("Light").performClick()
+        compose.runOnIdle {
+            val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+            assertEquals(true, bars.isAppearanceLightStatusBars)
+            assertEquals(true, bars.isAppearanceLightNavigationBars)
+        }
     }
 }
