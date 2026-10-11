@@ -7,12 +7,20 @@ import net.sagberg.kartoffel.coverage.CoverageSnapshot
 
 internal class FogTileProvider(
     initialCoverage: CoverageSnapshot,
-    private val renderer: FogTileRenderer = FogTileRenderer(),
+    initialOutline: CoverageOutlinePaint? = null,
 ) : TileProvider {
     private val coverage = AtomicReference(initialCoverage)
+    private val renderer = AtomicReference(FogTileRenderer(outline = initialOutline))
 
     fun updateCoverage(snapshot: CoverageSnapshot) {
         coverage.set(snapshot)
+    }
+
+    /** Returns whether the outline changed, in which case cached tiles are stale. */
+    fun updateOutline(outline: CoverageOutlinePaint?): Boolean {
+        if (renderer.get().outline == outline) return false
+        renderer.set(FogTileRenderer(outline = outline))
+        return true
     }
 
     override fun getTile(
@@ -25,7 +33,9 @@ internal class FogTileProvider(
             if (!tile.hasValidY()) {
                 TileProvider.NO_TILE
             } else {
-                val visibleCells = coverage.get().cellsIntersecting(tile.latLngBounds())
+                val renderer = renderer.get()
+                val reach = renderer.outline?.reachPixels?.toDouble() ?: 0.0
+                val visibleCells = coverage.get().cellsIntersecting(tile.latLngBounds(reach))
                 val bytes = renderer.renderPng(
                     tile = tile,
                     cellsToClear = visibleCells,

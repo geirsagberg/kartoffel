@@ -1,12 +1,16 @@
 package net.sagberg.kartoffel.map
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 import net.sagberg.kartoffel.coverage.CoverageSnapshot
 import net.sagberg.kartoffel.coverage.GeoCoordinate
+import net.sagberg.kartoffel.coverage.H3CoverageCells
 import net.sagberg.kartoffel.coverage.SeededCoverageCells
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -90,5 +94,108 @@ class FogTileProviderTest {
 
         assertTrue(Color.alpha(bitmap.getPixel(FOG_TILE_SIZE - 4, 4)) > 0)
         assertEquals(0, Color.alpha(bitmap.getPixel(clearedX, clearedY)))
+    }
+
+    @Test
+    fun outlineIsDrawnAlongTheEdgeOfVisitedCoverage() {
+        val edge = LoneCellEdge()
+        val provider = FogTileProvider(edge.snapshot, CoverageOutlinePaint(Color.RED, width = 4f))
+
+        val bitmap = provider.render(edge.tile)
+
+        val onEdge = bitmap.pixelAt(edge.midpoint)
+        assertEquals(255, Color.alpha(onEdge))
+        assertTrue(Color.red(onEdge) > 200 && Color.green(onEdge) < 60)
+        assertEquals(0, Color.alpha(bitmap.pixelAt(edge.inside(8f))))
+        assertEquals(plainFog, bitmap.getPixel(2, 2))
+    }
+
+    @Test
+    fun noOutlineLeavesTheEdgeAsPlainFogAndClearing() {
+        val edge = LoneCellEdge()
+
+        val bitmap = FogTileProvider(edge.snapshot).render(edge.tile)
+
+        assertEquals(plainFog, bitmap.pixelAt(edge.outside(3f)))
+        assertEquals(0, Color.alpha(bitmap.pixelAt(edge.inside(3f))))
+    }
+
+    @Test
+    fun glowSpreadsIntoTheFogButNotIntoVisitedCoverage() {
+        val edge = LoneCellEdge()
+        val provider = FogTileProvider(
+            edge.snapshot,
+            CoverageOutlinePaint(
+                color = Color.WHITE,
+                width = 1.5f,
+                glow = CoverageOutlinePaint.Glow(Color.WHITE, width = 10f, blurRadius = 5f),
+            ),
+        )
+
+        val bitmap = provider.render(edge.tile)
+
+        assertTrue(Color.red(bitmap.pixelAt(edge.outside(4f))) > Color.red(plainFog))
+        assertEquals(0, Color.alpha(bitmap.pixelAt(edge.inside(4f))))
+        assertEquals(plainFog, bitmap.getPixel(2, 2))
+    }
+
+    @Test
+    fun changingTheOutlineRendersNewTiles() {
+        val edge = LoneCellEdge()
+        val provider = FogTileProvider(edge.snapshot, CoverageOutlinePaint(Color.RED, width = 4f))
+
+        assertFalse(provider.updateOutline(CoverageOutlinePaint(Color.RED, width = 4f)))
+        assertTrue(provider.updateOutline(CoverageOutlinePaint(Color.BLUE, width = 4f)))
+
+        val onEdge = provider.render(edge.tile).pixelAt(edge.midpoint)
+        assertTrue(Color.blue(onEdge) > 200 && Color.red(onEdge) < 60)
+    }
+
+    /** One H3 Coverage Cell in Oslo, large enough at zoom 17 to probe around one of its edges. */
+    private class LoneCellEdge {
+        private val cell = H3CoverageCells().let { cells ->
+            cells.shapeOf(cells.cellAt(GeoCoordinate(latitude = 59.9139, longitude = 10.7522)))
+        }
+        val snapshot = CoverageSnapshot(listOf(cell))
+        private val center = GeoCoordinate(
+            latitude = cell.boundary.map { it.latitude }.average(),
+            longitude = cell.boundary.map { it.longitude }.average(),
+        )
+        val tile = fogTileForCoordinate(center, zoom = 17)
+        private val centerPixel = tile.pixelForCoordinate(center)
+        // The edge whose midpoint is nearest the middle of the tile, so probes stay inside it.
+        val midpoint = cell.boundary.indices
+            .map { index ->
+                val a = tile.pixelForCoordinate(cell.boundary[index])
+                val b = tile.pixelForCoordinate(cell.boundary[(index + 1) % cell.boundary.size])
+                TilePixelPoint((a.x + b.x) / 2f, (a.y + b.y) / 2f)
+            }
+            .minBy { hypot(it.x - FOG_TILE_SIZE / 2f, it.y - FOG_TILE_SIZE / 2f) }
+        private val outward = hypot(midpoint.x - centerPixel.x, midpoint.y - centerPixel.y).let { length ->
+            TilePixelPoint((midpoint.x - centerPixel.x) / length, (midpoint.y - centerPixel.y) / length)
+        }
+
+        fun outside(distance: Float) =
+            TilePixelPoint(midpoint.x + outward.x * distance, midpoint.y + outward.y * distance)
+
+        fun inside(distance: Float) = outside(-distance)
+    }
+
+    private fun FogTileProvider.render(tile: FogTileCoordinate): Bitmap {
+        val data = getTile(tile.x, tile.y, tile.zoom)?.data ?: error("Expected PNG tile bytes")
+        return BitmapFactory.decodeByteArray(data, 0, data.size)
+    }
+
+    private fun Bitmap.pixelAt(point: TilePixelPoint): Int {
+        val x = point.x.roundToInt()
+        val y = point.y.roundToInt()
+        check(x in 0 until FOG_TILE_SIZE && y in 0 until FOG_TILE_SIZE) {
+            "Probe ($x, $y) is outside the tile"
+        }
+        return getPixel(x, y)
+    }
+
+    private val plainFog: Int by lazy {
+        FogTileProvider(CoverageSnapshot.Empty).render(FogTileCoordinate(0, 0, 0)).getPixel(0, 0)
     }
 }
