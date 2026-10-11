@@ -37,16 +37,11 @@ internal class AutomaticTrackingRecorder(
                 maximumAccuracyMeters = settings.maximumAcceptedAccuracyMeters.toDouble(),
                 maximumInterpolationDistanceSteps = settings.maximumInterpolationDistanceSteps,
                 accuracyRejectionReason = AUTOMATIC_ACCURACY_REJECTION,
-                shortGapInterpolation = if (trigger == AutomaticFixTrigger.OPPORTUNISTIC) {
-                    null
-                } else {
-                    ShortGapInterpolationPolicy(
-                        maximumGapMillis = MAXIMUM_AUTOMATIC_INTERPOLATION_GAP_MILLIS,
-                        eligiblePreviousTriggers = AutomaticFixTrigger.entries
-                            .filterNot { it == AutomaticFixTrigger.OPPORTUNISTIC }
-                            .mapTo(mutableSetOf(), AutomaticFixTrigger::persistedName),
-                    )
-                },
+                shortGapInterpolation = ShortGapInterpolationPolicy(
+                    maximumGapMillis = MAXIMUM_AUTOMATIC_INTERPOLATION_GAP_MILLIS,
+                    eligiblePreviousTriggers = AutomaticFixTrigger.entries
+                        .mapTo(mutableSetOf(), AutomaticFixTrigger::persistedName),
+                ),
             ),
             activityMode = activity.persistedMode,
         )
