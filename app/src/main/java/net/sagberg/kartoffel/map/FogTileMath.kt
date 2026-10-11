@@ -46,12 +46,12 @@ internal fun fogTileForCoordinate(
 internal fun FogTileCoordinate.hasValidY(): Boolean =
     y in 0 until tileCountForZoom(zoom)
 
-internal fun FogTileCoordinate.latLngBounds(): GeoBounds {
+internal fun FogTileCoordinate.latLngBounds(paddingPixels: Double = 0.0): GeoBounds {
     val normalizedX = normalizedX()
-    val north = worldPixelYToLatitude(y * FOG_TILE_SIZE.toDouble(), zoom)
-    val south = worldPixelYToLatitude((y + 1) * FOG_TILE_SIZE.toDouble(), zoom)
-    val west = worldPixelXToLongitude(normalizedX * FOG_TILE_SIZE.toDouble(), zoom)
-    val east = worldPixelXToLongitude((normalizedX + 1) * FOG_TILE_SIZE.toDouble(), zoom)
+    val north = worldPixelYToLatitude(y * FOG_TILE_SIZE - paddingPixels, zoom)
+    val south = worldPixelYToLatitude((y + 1) * FOG_TILE_SIZE + paddingPixels, zoom)
+    val west = worldPixelXToLongitude(normalizedX * FOG_TILE_SIZE - paddingPixels, zoom)
+    val east = worldPixelXToLongitude((normalizedX + 1) * FOG_TILE_SIZE + paddingPixels, zoom)
 
     return GeoBounds(
         south = south,
