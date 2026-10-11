@@ -4,12 +4,7 @@ import net.sagberg.kartoffel.coverage.GeoBounds
 import net.sagberg.kartoffel.coverage.GeoCoordinate
 import net.sagberg.kartoffel.coverage.CoverageCellShape
 
-internal sealed interface TrackingInspectionScope {
-    data object AllTracking : TrackingInspectionScope
-    data object AutomaticTracking : TrackingInspectionScope
-    data object AllRecordings : TrackingInspectionScope
-    data class Recording(val id: Long) : TrackingInspectionScope
-}
+internal enum class InspectionSource { Automatic, Recordings, DrawnRoutes }
 
 internal sealed interface TrackingInspectionTime {
     data object AllTime : TrackingInspectionTime
@@ -23,12 +18,12 @@ internal sealed interface TrackingInspectionTime {
 }
 
 internal data class TrackingInspectionFilter(
-    val scope: TrackingInspectionScope,
+    val sources: Set<InspectionSource>,
     val time: TrackingInspectionTime,
 ) {
     companion object {
         val Default = TrackingInspectionFilter(
-            scope = TrackingInspectionScope.AllTracking,
+            sources = InspectionSource.entries.toSet(),
             time = TrackingInspectionTime.AllTime,
         )
     }
@@ -78,12 +73,6 @@ internal data class DiagnosticSampleCell(
     }
 }
 
-internal data class InspectionRecording(
-    val id: Long,
-    val startedAtMillis: Long,
-    val endedAtMillis: Long?,
-)
-
 internal data class InspectionDrawnRoute(
     val id: Long,
     val createdAtMillis: Long,
@@ -98,8 +87,6 @@ internal data class TrackingInspectionMeasurements(
 
 internal data class TrackingInspectionSnapshot(
     val filter: TrackingInspectionFilter,
-    val availableScopes: List<TrackingInspectionScope>,
-    val availableRecordings: List<InspectionRecording>,
     val cells: List<DiagnosticSampleCell>,
     val measurements: TrackingInspectionMeasurements,
     val drawnRoutes: List<InspectionDrawnRoute> = emptyList(),

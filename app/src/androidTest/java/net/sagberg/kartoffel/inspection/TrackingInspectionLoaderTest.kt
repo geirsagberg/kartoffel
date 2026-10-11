@@ -13,9 +13,6 @@ import net.sagberg.kartoffel.storage.KartoffelDatabase
 import net.sagberg.kartoffel.storage.LocationSampleEntity
 import net.sagberg.kartoffel.storage.RecordingEntity
 import net.sagberg.kartoffel.storage.inferredEvidenceMaskOf
-import net.sagberg.kartoffel.tracking.RecordingActivity
-import net.sagberg.kartoffel.tracking.RecordingLocationFix
-import net.sagberg.kartoffel.tracking.RecordingFixRecorder
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,7 +37,7 @@ class TrackingInspectionLoaderTest {
     fun closeDatabase() = database.close()
 
     @Test
-    fun loaderAppliesScopeAndInclusiveStartExclusiveEndWithoutLosingSamples() = runBlocking {
+    fun loaderAppliesSourcesAndInclusiveStartExclusiveEndWithoutLosingSamples() = runBlocking {
         val coordinate = GeoCoordinate(59.9109, 10.7522)
         val recordingId = database.recordings().insert(RecordingEntity(1_000, 5_000))
         insertSample(1_000, coordinate, "automatic_tracking", accepted = true)
@@ -49,7 +46,7 @@ class TrackingInspectionLoaderTest {
 
         val snapshot = TrackingInspectionLoader(database).load(
             TrackingInspectionFilter(
-                scope = TrackingInspectionScope.AutomaticTracking,
+                sources = setOf(InspectionSource.Automatic),
                 time = TrackingInspectionTime.Custom(startMillis = 1_000, endMillis = 3_000),
             ),
         )
@@ -64,30 +61,23 @@ class TrackingInspectionLoaderTest {
         )
         assertEquals(1, snapshot.cells.single().acceptedCount)
         assertEquals(1, snapshot.cells.single().rejectedCount)
-        assertEquals(listOf(recordingId), snapshot.availableRecordings.map { it.id })
 
         val empty = TrackingInspectionLoader(database).load(
-            TrackingInspectionFilter(
-                TrackingInspectionScope.AllTracking,
-                TrackingInspectionTime.Custom(10_000, 11_000),
+            TrackingInspectionFilter.Default.copy(
+                time = TrackingInspectionTime.Custom(10_000, 11_000),
             ),
         )
         assertTrue(empty.cells.isEmpty())
 
-        val allRecording = TrackingInspectionLoader(database).load(
-            TrackingInspectionFilter(
-                TrackingInspectionScope.AllRecordings,
-                TrackingInspectionTime.AllTime,
-            ),
+        val recordings = TrackingInspectionLoader(database).load(
+            TrackingInspectionFilter.Default.copy(sources = setOf(InspectionSource.Recordings)),
         )
-        val oneRecording = TrackingInspectionLoader(database).load(
-            TrackingInspectionFilter(
-                TrackingInspectionScope.Recording(recordingId),
-                TrackingInspectionTime.AllTime,
-            ),
+        assertEquals(listOf(3_000L), recordings.cells.single().samples.map { it.capturedAtMillis })
+
+        val none = TrackingInspectionLoader(database).load(
+            TrackingInspectionFilter.Default.copy(sources = emptySet()),
         )
-        assertEquals(listOf(3_000L), allRecording.cells.single().samples.map { it.capturedAtMillis })
-        assertEquals(listOf(3_000L), oneRecording.cells.single().samples.map { it.capturedAtMillis })
+        assertTrue(none.cells.isEmpty())
     }
 
     @Test
@@ -120,44 +110,6 @@ class TrackingInspectionLoaderTest {
     }
 
     @Test
-    fun recordingInspectionDoesNotReconstructHistoricalInterpolation() = runBlocking {
-        val recorder = RecordingFixRecorder(database)
-        val recordingId = recorder.start(1_000)
-        recorder.record(
-            recordingId,
-            RecordingLocationFix(
-                GeoCoordinate(59.9109, 10.7522),
-                capturedAtMillis = 2_000,
-                accuracyMeters = 8.0,
-            ),
-            RecordingActivity.WALKING,
-        )
-        recorder.record(
-            recordingId,
-            RecordingLocationFix(
-                GeoCoordinate(59.910527, 10.751046),
-                capturedAtMillis = 3_000,
-                accuracyMeters = 8.0,
-            ),
-            RecordingActivity.WALKING,
-        )
-
-        val snapshot = TrackingInspectionLoader(database).load(
-            TrackingInspectionFilter(
-                TrackingInspectionScope.Recording(recordingId),
-                TrackingInspectionTime.Custom(2_500, 4_000),
-            ),
-        )
-
-        assertEquals(1, snapshot.cells.count { it.state == DiagnosticCellState.Observed })
-        assertEquals(0, snapshot.cells.count { it.state == DiagnosticCellState.Inferred })
-        assertEquals(1, snapshot.cells.size)
-        assertEquals(1, snapshot.cells.sumOf { it.samples.size })
-        assertEquals(3_000L, snapshot.cells.single().evidenceFirstMillis)
-        assertEquals(3_000L, snapshot.cells.single().evidenceLastMillis)
-    }
-
-    @Test
     fun slowLoadLogContainsOnlyCountsFilterKindsAndStageDurations() = runBlocking {
         val ticks = ArrayDeque(listOf(0L, 600L, 700L, 800L))
         val messages = mutableListOf<String>()
@@ -170,7 +122,7 @@ class TrackingInspectionLoaderTest {
 
         assertEquals(1, messages.size)
         assertTrue(messages.single().contains("db_ms=600"))
-        assertTrue(messages.single().contains("samples=0 cells=0 scope=all time=all"))
+        assertTrue(messages.single().contains("samples=0 cells=0 sources=all time=all"))
         assertTrue(!messages.single().contains("latitude") && !messages.single().contains("longitude"))
     }
 
@@ -190,7 +142,13 @@ class TrackingInspectionLoaderTest {
         assertEquals(4_000L, route.createdAtMillis)
         assertEquals(cells, route.cells.map { it.id.toLong() }.toSet())
         assertTrue(route.cells.all { it.boundary.size >= 3 })
-        assertTrue(snapshot.availableRecordings.isEmpty())
+
+        val withoutDrawnRoutes = TrackingInspectionLoader(database).load(
+            TrackingInspectionFilter.Default.copy(
+                sources = setOf(InspectionSource.Automatic, InspectionSource.Recordings),
+            ),
+        )
+        assertTrue(withoutDrawnRoutes.drawnRoutes.isEmpty())
     }
 
     private suspend fun insertSample(

@@ -46,17 +46,6 @@ internal interface LocationSampleDao {
     ): List<LocationSampleEntity>
 
     @Query(
-        "SELECT * FROM location_samples WHERE recording_id = :recordingId " +
-            "AND captured_at_ms >= :startMillis AND captured_at_ms < :endMillis " +
-            "ORDER BY captured_at_ms, id",
-    )
-    suspend fun inspectionRecording(
-        recordingId: Long,
-        startMillis: Long,
-        endMillis: Long,
-    ): List<LocationSampleEntity>
-
-    @Query(
         """
         SELECT activity_mode, COUNT(*) AS fix_count
         FROM location_samples
