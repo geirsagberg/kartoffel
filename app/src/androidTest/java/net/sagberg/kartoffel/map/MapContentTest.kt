@@ -342,8 +342,8 @@ class MapContentTest {
     }
 
     @Test
-    fun trackingInspectionPreviewsAndConfirmsRemovalOfOneDrawnRoute() {
-        var selected: Long? = null
+    fun trackingInspectionTogglesShowingAndConfirmsRemovalOfOneDrawnRoute() {
+        val selected = mutableStateOf<Long?>(null)
         var removed: Long? = null
         val route = InspectionDrawnRoute(
             id = 7,
@@ -380,8 +380,8 @@ class MapContentTest {
                     onCenterCurrentLocation = {},
                     inspectionActive = true,
                     inspectionSnapshot = snapshot.value,
-                    selectedDrawnRouteId = selected,
-                    onSelectDrawnRoute = { selected = it },
+                    selectedDrawnRouteId = selected.value,
+                    onSelectDrawnRoute = { selected.value = it },
                     onRemoveDrawnRoute = {
                         removed = it
                         snapshot.value = snapshot.value.copy(drawnRoutes = emptyList())
@@ -405,8 +405,12 @@ class MapContentTest {
 
         compose.onNodeWithText("Drawn route", substring = true).assertIsDisplayed()
         compose.onNodeWithTag("remove_drawn_route_7").assertWidthIsAtLeast(64.dp)
-        compose.onNodeWithText("Preview").performClick()
-        compose.runOnIdle { assertEquals(7L, selected) }
+        compose.onNodeWithText("Show").performClick()
+        compose.runOnIdle { assertEquals(7L, selected.value) }
+        compose.onNodeWithText("Hide").performClick()
+        compose.runOnIdle { assertEquals(null, selected.value) }
+        compose.onNodeWithText("Show").performClick()
+        compose.runOnIdle { assertEquals(7L, selected.value) }
         compose.onNodeWithText("Remove").performClick()
         compose.onNodeWithText("Remove drawn route?").assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
@@ -599,6 +603,9 @@ class MapContentTest {
             }
         }
 
+        compose.onAllNodesWithTag("live_diagnostics_panel").assertCountEquals(0)
+        compose.onNodeWithTag("settings_diagnostics_menu").performClick()
+        compose.onNodeWithText("Show debug info").performClick()
         compose.onNodeWithText("Walking · 5 s").assertIsDisplayed()
         compose.onAllNodesWithText("Speed override").assertCountEquals(0)
 
@@ -611,6 +618,9 @@ class MapContentTest {
             "Latest fix: Rejected · 34 m · Accuracy exceeds recording limit",
         ).assertIsDisplayed()
         compose.onAllNodesWithText("History").assertCountEquals(0)
+        compose.onNodeWithTag("settings_diagnostics_menu").performClick()
+        compose.onNodeWithText("Hide debug info").performClick()
+        compose.onAllNodesWithTag("live_diagnostics_panel").assertCountEquals(0)
     }
 
     @Test
@@ -643,6 +653,8 @@ class MapContentTest {
             }
         }
 
+        compose.onNodeWithTag("settings_diagnostics_menu").performClick()
+        compose.onNodeWithText("Show debug info").performClick()
         compose.onNodeWithText("Unknown · 5 s fallback").assertIsDisplayed()
         compose.onNodeWithTag("live_diagnostics_panel").performClick()
         compose.onNodeWithText("Interval reason: Safe fallback").assertIsDisplayed()
@@ -674,6 +686,8 @@ class MapContentTest {
             }
         }
 
+        compose.onNodeWithTag("settings_diagnostics_menu").performClick()
+        compose.onNodeWithText("Show debug info").performClick()
         compose.onNodeWithText("Still · suspended").assertIsDisplayed()
         compose.onNodeWithTag("live_diagnostics_panel").performClick()
         compose.onNodeWithText("Location updates: Suspended").assertIsDisplayed()
