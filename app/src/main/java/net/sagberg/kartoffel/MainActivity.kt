@@ -9,15 +9,22 @@ import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import net.sagberg.kartoffel.storage.KartoffelDatabase
+import net.sagberg.kartoffel.ui.RecordingBorder
+import net.sagberg.kartoffel.settings.CoverageOutlineStyle
 import net.sagberg.kartoffel.diagnostics.TrackingDiagnosticsRoute
 import net.sagberg.kartoffel.map.MapScreen
 import net.sagberg.kartoffel.map.MapMenuActions
@@ -56,27 +63,32 @@ internal fun KartoffelApp() {
     SystemBarsFollowTheme(darkTheme)
 
     KartoffelTheme(darkTheme = darkTheme) {
-        when (destination) {
-            KartoffelDestination.MAP -> MapScreen(
-                coverageOutline = appearance.coverageOutline,
-                menuActions = MapMenuActions(
-                    onOpenSettings = { destination = KartoffelDestination.SETTINGS },
-                    onOpenAppearance = { appearanceOpen = true },
-                    onOpenTrackingDiagnostics = {
-                        destination = KartoffelDestination.TRACKING_DIAGNOSTICS
-                    },
-                ),
-            )
-            KartoffelDestination.SETTINGS -> {
-                BackHandler { destination = KartoffelDestination.MAP }
-                CoverageSettingsRoute(
-                    persistenceScope = settingsPersistenceScope,
-                    onBack = { destination = KartoffelDestination.MAP },
+        Box(Modifier.fillMaxSize()) {
+            when (destination) {
+                KartoffelDestination.MAP -> MapScreen(
+                    coverageOutline = appearance.coverageOutline,
+                    menuActions = MapMenuActions(
+                        onOpenSettings = { destination = KartoffelDestination.SETTINGS },
+                        onOpenAppearance = { appearanceOpen = true },
+                        onOpenTrackingDiagnostics = {
+                            destination = KartoffelDestination.TRACKING_DIAGNOSTICS
+                        },
+                    ),
                 )
+                KartoffelDestination.SETTINGS -> {
+                    BackHandler { destination = KartoffelDestination.MAP }
+                    CoverageSettingsRoute(
+                        persistenceScope = settingsPersistenceScope,
+                        onBack = { destination = KartoffelDestination.MAP },
+                    )
+                }
+                KartoffelDestination.TRACKING_DIAGNOSTICS -> {
+                    BackHandler { destination = KartoffelDestination.MAP }
+                    TrackingDiagnosticsRoute(onBack = { destination = KartoffelDestination.MAP })
+                }
             }
-            KartoffelDestination.TRACKING_DIAGNOSTICS -> {
-                BackHandler { destination = KartoffelDestination.MAP }
-                TrackingDiagnosticsRoute(onBack = { destination = KartoffelDestination.MAP })
+            if (destination != KartoffelDestination.MAP) {
+                SecondaryScreenRecordingBorder(appearance.coverageOutline)
             }
         }
         if (appearanceOpen) {
@@ -100,4 +112,13 @@ private fun SystemBarsFollowTheme(darkTheme: Boolean) {
         val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkTheme }
         activity.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
     }
+}
+
+/** Only secondary screens observe here; the Map owns its subscription and restore lifecycle. */
+@Composable
+private fun SecondaryScreenRecordingBorder(coverageOutline: CoverageOutlineStyle) {
+    val context = LocalContext.current
+    val database = remember(context) { KartoffelDatabase.open(context) }
+    val activeRecording by database.recordings().observeActive().collectAsState(initial = null)
+    RecordingBorder(activeRecording != null, coverageOutline)
 }

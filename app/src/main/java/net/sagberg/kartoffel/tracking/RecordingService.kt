@@ -15,6 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import net.sagberg.kartoffel.MainActivity
 import net.sagberg.kartoffel.R
 import net.sagberg.kartoffel.diagnostics.LiveTrackingDiagnostics
 import net.sagberg.kartoffel.storage.KartoffelDatabase
@@ -145,10 +146,21 @@ internal class RecordingService : Service() {
             stopIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val openPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).apply {
+                action = Intent.ACTION_MAIN
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_my_location_24)
             .setContentTitle("Recording")
             .setContentText("Kartoffel is recording your route")
+            .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .addAction(Notification.Action.Builder(null, "Stop", stopPendingIntent).build())
             .build()

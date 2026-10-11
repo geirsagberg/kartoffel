@@ -2,6 +2,10 @@ package net.sagberg.kartoffel.settings
 
 import android.content.Context
 import androidx.core.content.edit
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import net.sagberg.kartoffel.ui.theme.LocalDarkTheme
 
 internal enum class ThemeMode(val storedValue: String, val label: String) {
     System("system", "System"),
@@ -57,5 +61,19 @@ internal class AppearancePreferences(context: Context) {
         const val PREFERENCES_NAME = "appearance"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_COVERAGE_OUTLINE = "coverage_outline"
+    }
+}
+
+/** Shared by the coverage edge and the recording reminder. None uses the active-state color. */
+@Composable
+internal fun CoverageOutlineStyle.color(): Color {
+    val colors = MaterialTheme.colorScheme
+    return when (this) {
+        CoverageOutlineStyle.None, CoverageOutlineStyle.Teal -> colors.primary
+        CoverageOutlineStyle.Graphite -> colors.onSurface.copy(alpha = 0.9f)
+        CoverageOutlineStyle.Halo -> {
+            val haloColor = if (LocalDarkTheme.current) colors.onSurface else colors.inverseOnSurface
+            haloColor.copy(alpha = 0.94f)
+        }
     }
 }
