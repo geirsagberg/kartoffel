@@ -132,7 +132,7 @@ class AutomaticTrackingRecorderTest {
     @Test
     fun oldOrRejectedAutomaticEvidenceDoesNotBridgeAGap() = runBlocking {
         val start = GeoCoordinate(59.9109, 10.7522)
-        val destination = GeoCoordinate(59.910527, 10.751046)
+        val destination = GeoCoordinate(59.910390, 10.750500)
         recorder.record(
             RecordingLocationFix(start, 2_000, 8.0),
             AutomaticFixTrigger.MOVEMENT_WINDOW,
@@ -153,9 +153,9 @@ class AutomaticTrackingRecorderTest {
     }
 
     @Test
-    fun opportunisticFixCannotBeEitherEndpointOfInterpolation() = runBlocking {
+    fun opportunisticFixCanBeEitherEndpointOfInterpolation() = runBlocking {
         val start = GeoCoordinate(59.9109, 10.7522)
-        val destination = GeoCoordinate(59.910527, 10.751046)
+        val destination = GeoCoordinate(59.910390, 10.750500)
         recorder.record(
             RecordingLocationFix(start, 2_000, 8.0),
             AutomaticFixTrigger.MOVEMENT_WINDOW,
@@ -166,7 +166,7 @@ class AutomaticTrackingRecorderTest {
             AutomaticFixTrigger.OPPORTUNISTIC,
             RecordingActivity.UNKNOWN,
         )
-        assertEquals(2, database.coverageCells().all().size)
+        assertEquals(3, database.coverageCells().all().size)
 
         database.clearAllTables()
 
@@ -181,6 +181,34 @@ class AutomaticTrackingRecorderTest {
             RecordingActivity.WALKING,
         )
 
+        assertEquals(3, database.coverageCells().all().size)
+    }
+
+    @Test
+    fun opportunisticFixesUseTheCurrentInterpolationSetting() = runBlocking {
+        val settings = RoomCoverageSettings(database.coverageSettings())
+        val start = GeoCoordinate(59.9109, 10.7522)
+        val destination = GeoCoordinate(59.910390, 10.750500)
+        settings.setMaximumInterpolationDistanceSteps(1)
+        recorder.record(
+            RecordingLocationFix(start, 2_000, 8.0),
+            AutomaticFixTrigger.OPPORTUNISTIC,
+            RecordingActivity.UNKNOWN,
+        )
+        recorder.record(
+            RecordingLocationFix(destination, 3_000, 8.0),
+            AutomaticFixTrigger.OPPORTUNISTIC,
+            RecordingActivity.UNKNOWN,
+        )
         assertEquals(2, database.coverageCells().all().size)
+
+        settings.setMaximumInterpolationDistanceSteps(3)
+        recorder.record(
+            RecordingLocationFix(start, 4_000, 8.0),
+            AutomaticFixTrigger.OPPORTUNISTIC,
+            RecordingActivity.UNKNOWN,
+        )
+
+        assertEquals(3, database.coverageCells().all().size)
     }
 }
