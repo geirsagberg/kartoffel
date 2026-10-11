@@ -516,7 +516,7 @@ class MapContentTest {
             InspectionDrawnRoute(
                 id = id,
                 createdAtMillis = id * 1_000,
-                cells = listOf(CoverageCellShape(id.toString(), boundary)),
+                cells = listOf(CoverageCellShape("123", boundary)),
             )
         }
         val snapshot = TrackingInspectionSnapshot(
@@ -531,8 +531,10 @@ class MapContentTest {
             hasLocationPermission = true,
             inspectionActive = true,
             inspectionSnapshot = snapshot,
+            selectedInspectionCellId = 123,
         )
 
+        compose.onNodeWithText("Routes (6)").performClick()
         compose.onNodeWithTag("drawn_route_list").assertHeightIsEqualTo(220.dp)
         compose.onNodeWithTag("remove_drawn_route_1").assertWidthIsAtLeast(64.dp)
     }
