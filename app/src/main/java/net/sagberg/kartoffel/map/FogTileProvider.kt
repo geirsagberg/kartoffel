@@ -22,16 +22,13 @@ internal class FogTileProvider(
         state.updateAndGet { it.copy(coverage = snapshot) }
     }
 
-    /** Returns whether the outline changed, in which case cached tiles are stale. */
-    fun updateOutline(outline: CoverageOutlinePaint?): Boolean {
+    /** Returns whether the outline or scale changed, in which case cached tiles are stale. */
+    fun updateRendering(outline: CoverageOutlinePaint?, scale: Int = 1): Boolean {
+        fun FogTileRenderer.matches() = this.outline == outline && this.scale == scale
         val previous = state.getAndUpdate {
-            if (it.renderer.outline == outline) {
-                it
-            } else {
-                it.copy(renderer = FogTileRenderer(outline = outline))
-            }
+            if (it.renderer.matches()) it else it.copy(renderer = FogTileRenderer(outline = outline, scale = scale))
         }
-        return previous.renderer.outline != outline
+        return !previous.renderer.matches()
     }
 
     override fun getTile(
@@ -52,7 +49,7 @@ internal class FogTileProvider(
 
                 // An in-flight tile may finish after the overlay's cache has been cleared.
                 // Returning null asks Maps to retry instead of caching an obsolete tile.
-                if (state.get() !== renderingState) null else Tile(FOG_TILE_SIZE, FOG_TILE_SIZE, bytes)
+                if (state.get() !== renderingState) null else Tile(renderer.sizePixels, renderer.sizePixels, bytes)
             }
         } catch (failure: Exception) {
             when (fogTileFailureHandlingFor(failure)) {

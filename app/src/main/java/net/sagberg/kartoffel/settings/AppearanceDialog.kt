@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -19,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 
-/** Theme and Coverage Outline choices. Each choice applies and is kept as soon as it is made. */
+/** Theme, Coverage Outline and Fog detail choices. Each choice applies and is kept as soon as it is made. */
 @Composable
 internal fun AppearanceDialog(
     appearance: Appearance,
@@ -30,7 +32,10 @@ internal fun AppearanceDialog(
         onDismissRequest = onDismiss,
         title = { Text("Appearance") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 ChoiceGroup(
                     title = "Theme",
                     choices = ThemeMode.entries,
@@ -44,6 +49,13 @@ internal fun AppearanceDialog(
                     selected = appearance.coverageOutline,
                     label = CoverageOutlineStyle::label,
                     onSelect = { onAppearanceChange(appearance.copy(coverageOutline = it)) },
+                )
+                ChoiceGroup(
+                    title = "Fog detail",
+                    choices = FogDetail.entries,
+                    selected = appearance.fogDetail,
+                    label = FogDetail::label,
+                    onSelect = { onAppearanceChange(appearance.copy(fogDetail = it)) },
                 )
             }
         },
