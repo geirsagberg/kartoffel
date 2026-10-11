@@ -15,6 +15,6 @@ internal data class DrawnRouteMapInteractions(
     val active: Boolean,
     val preview: DrawnRoutePreview,
     val onMapClick: (GeoCoordinate) -> Unit,
-    val onWaypointDragEnd: (Int, GeoCoordinate) -> Unit,
+    val onMoveWaypoint: (Int, GeoCoordinate) -> Unit,
     val editable: Boolean = active,
 )

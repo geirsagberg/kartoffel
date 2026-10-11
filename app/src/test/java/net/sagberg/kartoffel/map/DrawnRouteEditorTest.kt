@@ -49,6 +49,28 @@ class DrawnRouteEditorTest {
     }
 
     @Test
+    fun editsOnlyComputePathsForChangedSegments() {
+        val computed = mutableListOf<Pair<GeoCoordinate, GeoCoordinate>>()
+        val editor = DrawnRouteEditor(
+            pathBetween = { start, destination ->
+                computed += start to destination
+                listOf(CoverageCellId(1))
+            },
+            saveRoute = { 1L },
+        )
+        val fourth = GeoCoordinate(4.0, 4.0)
+        editor.enter()
+        listOf(first, second, third, fourth).forEach(editor::add)
+        computed.clear()
+        val moved = GeoCoordinate(2.5, 2.5)
+        editor.move(1, moved)
+        assertEquals(listOf(first to moved, moved to third), computed)
+        computed.clear()
+        editor.undo()
+        assertTrue(computed.isEmpty())
+    }
+
+    @Test
     fun cancelDiscardsOnlyTheUnconfirmedDraftAndAllowsAFreshStart() {
         val editor = DrawnRouteEditor(
             pathBetween = { _, _ -> listOf(CoverageCellId(1)) },

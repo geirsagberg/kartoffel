@@ -229,8 +229,8 @@ class MapContentTest {
                                 },
                             )
                             Box(
-                                Modifier.size(48.dp).testTag("fake_waypoint_drag_end").clickable {
-                                    interactions.onWaypointDragEnd(1, GeoCoordinate(3.0, 3.0))
+                                Modifier.size(48.dp).testTag("fake_waypoint_move").clickable {
+                                    interactions.onMoveWaypoint(1, GeoCoordinate(3.0, 3.0))
                                 },
                             )
                             if (interactions.preview.cells.isNotEmpty()) {
@@ -258,7 +258,7 @@ class MapContentTest {
             .assertIsDisplayed()
         compose.onNodeWithTag("provisional_cell_preview").assertIsDisplayed()
         compose.onNodeWithTag("route_polyline_preview").assertIsDisplayed()
-        compose.onNodeWithTag("fake_waypoint_drag_end").performClick()
+        compose.onNodeWithTag("fake_waypoint_move").performClick()
         compose.runOnIdle {
             assertEquals(listOf(9L, 10L), editor.state.value.preview.cells.map { it.value })
         }

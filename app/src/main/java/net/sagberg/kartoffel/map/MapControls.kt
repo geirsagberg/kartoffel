@@ -180,7 +180,7 @@ internal fun MapContent(
                 editable = manualDrawingActive && !drawnRouteSaving,
                 preview = drawnRoutePreview,
                 onMapClick = onAddManualWaypoint,
-                onWaypointDragEnd = onMoveManualWaypoint,
+                onMoveWaypoint = onMoveManualWaypoint,
             ),
             mapPadding,
         )
