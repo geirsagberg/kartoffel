@@ -54,16 +54,11 @@ internal fun TrackingInspectionControls(
     loading: Boolean,
     empty: Boolean,
     onFilterChange: (TrackingInspectionFilter) -> Unit,
-    drawnRoutes: List<InspectionDrawnRoute> = emptyList(),
-    selectedDrawnRouteId: Long? = null,
-    onSelectDrawnRoute: (Long?) -> Unit = {},
-    onRemoveDrawnRoute: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var scopeMenu by remember { mutableStateOf(false) }
     var timeMenu by remember { mutableStateOf(false) }
     var filtersExpanded by rememberSaveable { mutableStateOf(false) }
-    var pendingRemoval by remember { mutableStateOf<InspectionDrawnRoute?>(null) }
     val customTime = filter.time as? TrackingInspectionTime.Custom
     var customStart by remember(filter.time) {
         mutableStateOf(customTime?.startMillis?.localDateTime().orEmpty())
@@ -81,23 +76,6 @@ internal fun TrackingInspectionControls(
         TrackingInspectionTime.Last24Hours(nowMillis),
         TrackingInspectionTime.Last7Days(nowMillis),
     )
-
-    pendingRemoval?.let { route ->
-        AlertDialog(
-            onDismissRequest = { pendingRemoval = null },
-            title = { Text("Remove drawn route?") },
-            text = { Text("Places only this route cleared will be fogged again.") },
-            dismissButton = {
-                TextButton(onClick = { pendingRemoval = null }) { Text("Cancel") }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingRemoval = null
-                    onRemoveDrawnRoute(route.id)
-                }) { Text("Remove") }
-            },
-        )
-    }
 
     Card(modifier = modifier.fillMaxWidth().testTag("inspection_filter_controls")) {
         Column(
@@ -235,52 +213,6 @@ internal fun TrackingInspectionControls(
             }
 
             InspectionLegend()
-            if (drawnRoutes.isNotEmpty()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 220.dp)
-                        .testTag("drawn_route_list"),
-                ) {
-                    itemsIndexed(drawnRoutes, key = { _, route -> route.id }) { index, route ->
-                        if (index > 0) HorizontalDivider()
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
-                                .testTag("drawn_route_${route.id}"),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Drawn route", maxLines = 1)
-                                Text(
-                                    route.createdAtMillis.compactTime(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            TextButton(onClick = {
-                                onSelectDrawnRoute(
-                                    route.id.takeUnless { selectedDrawnRouteId == it },
-                                )
-                            }) {
-                                Text(
-                                    if (selectedDrawnRouteId == route.id) "Hide" else "Show",
-                                    maxLines = 1,
-                                )
-                            }
-                            TextButton(
-                                modifier = Modifier.testTag("remove_drawn_route_${route.id}"),
-                                onClick = { pendingRemoval = route },
-                            ) {
-                                Text("Remove", maxLines = 1)
-                            }
-                        }
-                    }
-                }
-            }
             when {
                 loading -> Text(
                     "Loading retained evidence…",
@@ -340,18 +272,95 @@ private fun InspectionLegend() {
 
 @Composable
 internal fun TrackingInspectionDetails(
-    cell: DiagnosticSampleCell,
+    cell: DiagnosticSampleCell?,
     sort: SampleSort,
     onSortChange: (SampleSort) -> Unit,
+    cellId: Long,
+    drawnRoutes: List<InspectionDrawnRoute> = emptyList(),
+    onRemoveDrawnRoute: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var historyExpanded by rememberSaveable(cell.cellId) { mutableStateOf(false) }
+    var historyExpanded by rememberSaveable(cellId) { mutableStateOf(false) }
+    var routesExpanded by remember(cellId) { mutableStateOf(false) }
+    var pendingRemoval by remember(cellId) { mutableStateOf<InspectionDrawnRoute?>(null) }
+
+    pendingRemoval?.let { route ->
+        AlertDialog(
+            onDismissRequest = { pendingRemoval = null },
+            title = { Text("Remove drawn route?") },
+            text = { Text("Places only this route cleared will be fogged again.") },
+            dismissButton = {
+                TextButton(onClick = { pendingRemoval = null }) { Text("Cancel") }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingRemoval = null
+                    onRemoveDrawnRoute(route.id)
+                }) { Text("Remove") }
+            },
+        )
+    }
+
+    if (routesExpanded && drawnRoutes.isNotEmpty() && pendingRemoval == null) {
+        AlertDialog(
+            onDismissRequest = { routesExpanded = false },
+            title = { Text("Routes (${drawnRoutes.size})") },
+            text = {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .testTag("drawn_route_list"),
+                ) {
+                    itemsIndexed(drawnRoutes, key = { _, route -> route.id }) { index, route ->
+                        if (index > 0) HorizontalDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                                .testTag("drawn_route_${route.id}"),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Drawn route", maxLines = 1)
+                                Text(
+                                    route.createdAtMillis.compactTime(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            TextButton(
+                                modifier = Modifier.testTag("remove_drawn_route_${route.id}"),
+                                onClick = { pendingRemoval = route },
+                            ) {
+                                Text("Remove", maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { routesExpanded = false }) { Text("Close") }
+            },
+        )
+    }
 
     Card(modifier = modifier.testTag("inspection_cell_details")) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (drawnRoutes.isNotEmpty()) {
+                TextButton(onClick = { routesExpanded = true }) {
+                    Text("Routes (${drawnRoutes.size})")
+                }
+            }
+            if (cell == null) {
+                Text("Drawn Coverage Evidence")
+                return@Column
+            }
             Text(
                 cell.state.label,
                 style = MaterialTheme.typography.titleMedium,

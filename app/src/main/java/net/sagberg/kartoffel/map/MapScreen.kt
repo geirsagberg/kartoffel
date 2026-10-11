@@ -222,7 +222,6 @@ private fun MapRoute(
     var inspectionFilter by remember { mutableStateOf(TrackingInspectionFilter.Default) }
     var inspectionSnapshot by remember { mutableStateOf<TrackingInspectionSnapshot?>(null) }
     var selectedInspectionCellId by remember { mutableStateOf<Long?>(null) }
-    var selectedDrawnRouteId by remember { mutableStateOf<Long?>(null) }
     var inspectionSort by remember { mutableStateOf(SampleSort.NewestFirst) }
     val drawnRouteH3 = remember { H3CoverageCells() }
     val drawnRouteEditor = remember(database, drawnRouteH3) {
@@ -364,7 +363,6 @@ private fun MapRoute(
         }
         inspectionSnapshot = inspectionLoader.load(inspectionFilter)
         selectedInspectionCellId = null
-        selectedDrawnRouteId = null
     }
 
     fun moveToCurrentLocation(zoom: Float) {
@@ -487,17 +485,13 @@ private fun MapRoute(
             inspectionActive = false
             inspectionFilter = TrackingInspectionFilter.Default
             selectedInspectionCellId = null
-            selectedDrawnRouteId = null
             inspectionSort = SampleSort.NewestFirst
         },
         onInspectionFilterChange = { inspectionFilter = it },
         onInspectionSortChange = { inspectionSort = it },
-        selectedDrawnRouteId = selectedDrawnRouteId,
-        onSelectDrawnRoute = { selectedDrawnRouteId = it },
         onRemoveDrawnRoute = { routeId ->
             scope.launch {
                 database.drawnRoutes().remove(routeId)
-                selectedDrawnRouteId = null
                 inspectionSnapshot = inspectionLoader.load(inspectionFilter)
             }
         },
@@ -579,16 +573,31 @@ private fun MapRoute(
                             clickable = true,
                         )
                     }
-                    inspectionSnapshot?.drawnRoutes
-                        ?.firstOrNull { it.id == selectedDrawnRouteId }
-                        ?.cells
-                        ?.forEach { cell ->
+                    inspectionSnapshot?.drawnRoutes.orEmpty()
+                        .flatMap { it.cells }
+                        .distinctBy { it.id }
+                        .forEach { cell ->
                             Polygon(
                                 points = cell.boundary.map { LatLng(it.latitude, it.longitude) },
                                 fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.62f),
-                                strokeColor = MaterialTheme.colorScheme.tertiary,
-                                strokeWidth = 5f,
+                                strokeColor = if (cell.id == selectedInspectionCellId?.toString()) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.tertiary
+                                },
+                                strokeWidth = if (cell.id == selectedInspectionCellId?.toString()) {
+                                    9f
+                                } else {
+                                    5f
+                                },
                                 zIndex = 22f,
+                                clickable = true,
+                                onClick = {
+                                    val cellId = cell.id.toLong()
+                                    selectedInspectionCellId = cellId.takeUnless {
+                                        selectedInspectionCellId == it
+                                    }
+                                },
                             )
                         }
                 }

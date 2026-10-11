@@ -427,8 +427,8 @@ class MapContentTest {
     }
 
     @Test
-    fun trackingInspectionTogglesShowingAndConfirmsRemovalOfOneDrawnRoute() {
-        val selected = mutableStateOf<Long?>(null)
+    fun trackingInspectionListsOnlySelectedCellRoutesAndConfirmsRemoval() {
+        val selectedCell = mutableStateOf<Long?>(null)
         var removed: Long? = null
         val route = InspectionDrawnRoute(
             id = 7,
@@ -451,7 +451,11 @@ class MapContentTest {
                 availableRecordings = emptyList(),
                 cells = emptyList(),
                 measurements = TrackingInspectionMeasurements(0, 0, 0),
-                drawnRoutes = listOf(route),
+                drawnRoutes = listOf(
+                    route,
+                    route.copy(id = 8),
+                    route.copy(id = 9, cells = listOf(route.cells.single().copy(id = "456"))),
+                ),
             ),
         )
         compose.setContent {
@@ -465,46 +469,40 @@ class MapContentTest {
                     onCenterCurrentLocation = {},
                     inspectionActive = true,
                     inspectionSnapshot = snapshot.value,
-                    selectedDrawnRouteId = selected.value,
-                    onSelectDrawnRoute = { selected.value = it },
+                    selectedInspectionCellId = selectedCell.value,
                     onRemoveDrawnRoute = {
                         removed = it
-                        snapshot.value = snapshot.value.copy(drawnRoutes = emptyList())
-                    },
-                    map = { _, _ ->
-                        Box(
-                            Modifier
-                                .size(1.dp)
-                                .testTag(
-                                    if (snapshot.value.drawnRoutes.isEmpty()) {
-                                        "refreshed_effective_coverage"
-                                    } else {
-                                        "drawn_route_coverage_preview"
-                                    },
-                                ),
+                        snapshot.value = snapshot.value.copy(
+                            drawnRoutes = snapshot.value.drawnRoutes.filterNot { route -> route.id == it },
                         )
                     },
+                    map = { _, _ -> },
                 )
             }
         }
 
-        compose.onNodeWithText("Drawn route", substring = true).assertIsDisplayed()
+        compose.onAllNodesWithTag("drawn_route_list").assertCountEquals(0)
+        compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
+        compose.runOnIdle { selectedCell.value = 123 }
+        compose.onNodeWithText("Routes (2)").performClick()
+        compose.onNodeWithTag("drawn_route_7").assertIsDisplayed()
+        compose.onNodeWithTag("drawn_route_8").assertIsDisplayed()
+        compose.onAllNodesWithTag("drawn_route_9").assertCountEquals(0)
         compose.onNodeWithTag("remove_drawn_route_7").assertWidthIsAtLeast(64.dp)
-        compose.onNodeWithText("Show").performClick()
-        compose.runOnIdle { assertEquals(7L, selected.value) }
-        compose.onNodeWithText("Hide").performClick()
-        compose.runOnIdle { assertEquals(null, selected.value) }
-        compose.onNodeWithText("Show").performClick()
-        compose.runOnIdle { assertEquals(7L, selected.value) }
-        compose.onNodeWithText("Remove").performClick()
+        compose.onNodeWithTag("remove_drawn_route_7").performClick()
         compose.onNodeWithText("Remove drawn route?").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(null, removed) }
         compose.onNodeWithText("Cancel").performClick()
         compose.runOnIdle { assertEquals(null, removed) }
+        compose.onNodeWithTag("remove_drawn_route_7").performClick()
         compose.onNodeWithText("Remove").performClick()
-        compose.onAllNodesWithText("Remove", useUnmergedTree = true)[1].performClick()
         compose.runOnIdle { assertEquals(7L, removed) }
         compose.onAllNodesWithTag("drawn_route_7").assertCountEquals(0)
-        compose.onNodeWithTag("refreshed_effective_coverage").assertIsDisplayed()
+        compose.onNodeWithTag("drawn_route_8").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Routes (1)").assertIsDisplayed()
+        compose.runOnIdle { selectedCell.value = 789 }
+        compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
     }
 
     @Test
