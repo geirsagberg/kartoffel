@@ -42,12 +42,11 @@ class DrawnRouteFogIntegrationTest {
     @Test
     fun confirmationPersistsExactPreviewAndRemovalPreservesOtherEvidence() = runBlocking {
         val h3 = H3CoverageCells()
-        val preview = RouteDrawing(h3).recompute(
-            listOf(
-                GeoCoordinate(59.9109, 10.7522),
-                GeoCoordinate(59.9139, 10.7612),
-            ),
-        )
+        val editor = DrawnRouteEditor(database.drawnRoutes(), h3) { 2_000 }
+        editor.enter()
+        editor.add(GeoCoordinate(59.9109, 10.7522))
+        editor.add(GeoCoordinate(59.9139, 10.7612))
+        val preview = editor.state.value.preview
         val routeCells = preview.cells.map { it.value }.toSet()
         val captured = routeCells.first()
         val overlapping = routeCells.last()
@@ -58,8 +57,8 @@ class DrawnRouteFogIntegrationTest {
         val drawnOnlyCenter = h3.shapeOf(CoverageCellId(drawnOnly)).boundary.center()
         assertTrue(fogAlpha(drawnOnlyCenter, loader.load()) > 0)
 
-        val firstRoute = DrawnRouteRecorder(database.drawnRoutes()) { 2_000 }
-            .confirm(preview) ?: error("Expected complete preview to confirm")
+        val firstRoute = editor.confirm()?.getOrThrow()
+            ?: error("Expected complete preview to confirm")
 
         assertTrue(preview.canConfirm)
         assertEquals(routeCells.sorted(), database.drawnRoutes().cellsForRoute(firstRoute))
@@ -78,15 +77,14 @@ class DrawnRouteFogIntegrationTest {
 
     @Test
     fun failedPreviewCannotPersistPartialRoute() = runBlocking {
-        val waypoint = GeoCoordinate(59.91, 10.75)
-        val failed = DrawnRoutePreview(
-            waypoints = listOf(waypoint, waypoint),
-            cells = setOf(CoverageCellId(123)),
-            failingSegmentIndex = 0,
+        val editor = DrawnRouteEditor(
+            pathBetween = { _, _ -> error("Cannot connect segment") },
+            saveRoute = { cells -> database.drawnRoutes().create(2_000, cells) },
         )
-
-        val result = DrawnRouteRecorder(database.drawnRoutes()) { 2_000 }
-            .confirm(failed)
+        editor.enter()
+        editor.add(GeoCoordinate(59.91, 10.75))
+        editor.add(GeoCoordinate(59.92, 10.76))
+        val result = editor.confirm()
 
         assertEquals(null, result)
         assertEquals(emptyList<Long>(), database.drawnRoutes().allCellIds())

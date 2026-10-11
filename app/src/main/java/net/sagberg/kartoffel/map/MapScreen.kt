@@ -224,12 +224,10 @@ private fun MapRoute(
     var selectedDrawnRouteId by remember { mutableStateOf<Long?>(null) }
     var inspectionSort by remember { mutableStateOf(SampleSort.NewestFirst) }
     val drawnRouteH3 = remember { H3CoverageCells() }
-    val routeDrawing = remember(drawnRouteH3) { RouteDrawing(drawnRouteH3) }
-    val drawnRouteRecorder = remember(database) {
-        DrawnRouteRecorder(database.drawnRoutes())
+    val drawnRouteEditor = remember(database, drawnRouteH3) {
+        DrawnRouteEditor(database.drawnRoutes(), drawnRouteH3)
     }
-    var manualDrawingActive by remember { mutableStateOf(false) }
-    var drawnRoutePreview by remember { mutableStateOf(DrawnRoutePreview()) }
+    val drawnRouteState by drawnRouteEditor.state.collectAsState()
     var effectiveCoverageCellIds by remember { mutableStateOf(emptySet<Long>()) }
     val persistedCoverage = remember(database) {
         PersistedCoverageLoader(database.coverageCells(), database.drawnRoutes())
@@ -501,32 +499,19 @@ private fun MapRoute(
                 inspectionSnapshot = inspectionLoader.load(inspectionFilter)
             }
         },
-        manualDrawingActive = manualDrawingActive,
-        drawnRoutePreview = drawnRoutePreview,
-        onEnterManualDrawing = {
-            drawnRoutePreview = DrawnRoutePreview()
-            manualDrawingActive = true
-        },
-        onUndoManualWaypoint = {
-            drawnRoutePreview = routeDrawing.undo(drawnRoutePreview)
-        },
-        onAddManualWaypoint = { waypoint ->
-            drawnRoutePreview = routeDrawing.add(drawnRoutePreview, waypoint)
-        },
-        onMoveManualWaypoint = { index, waypoint ->
-            drawnRoutePreview = routeDrawing.move(drawnRoutePreview, index, waypoint)
-        },
-        onCancelManualDrawing = {
-            drawnRoutePreview = DrawnRoutePreview()
-            manualDrawingActive = false
-        },
+        manualDrawingActive = drawnRouteState.active,
+        drawnRouteSaving = drawnRouteState.saving,
+        drawnRoutePreview = drawnRouteState.preview,
+        onEnterManualDrawing = drawnRouteEditor::enter,
+        onUndoManualWaypoint = drawnRouteEditor::undo,
+        onAddManualWaypoint = drawnRouteEditor::add,
+        onMoveManualWaypoint = drawnRouteEditor::move,
+        onCancelManualDrawing = drawnRouteEditor::cancel,
         onConfirmDrawnRoute = {
-            if (drawnRoutePreview.canConfirm) {
-                scope.launch {
-                    if (drawnRouteRecorder.confirm(drawnRoutePreview) != null) {
-                        drawnRoutePreview = DrawnRoutePreview()
-                        manualDrawingActive = false
-                    }
+            scope.launch {
+                drawnRouteEditor.confirm()?.onFailure {
+                    Toast.makeText(context, "Could not save route. Try again.", Toast.LENGTH_SHORT)
+                        .show()
                 }
             }
         },
@@ -547,7 +532,7 @@ private fun MapRoute(
                     myLocationButtonEnabled = false,
                     zoomControlsEnabled = false,
                 ),
-                onMapClick = if (drawnRouteMap.active) {
+                onMapClick = if (drawnRouteMap.editable) {
                     { point ->
                         drawnRouteMap.onMapClick(
                             GeoCoordinate(point.latitude, point.longitude),
@@ -629,6 +614,7 @@ private fun MapRoute(
                         DraggableManualWaypoint(
                             index = index,
                             waypoint = waypoint,
+                            draggable = drawnRouteMap.editable,
                             onDragEnd = { moved -> drawnRouteMap.onWaypointDragEnd(index, moved) },
                         )
                     }
@@ -669,6 +655,7 @@ private fun CoverageOutlineStyle.paint(): CoverageOutlinePaint? {
 private fun DraggableManualWaypoint(
     index: Int,
     waypoint: GeoCoordinate,
+    draggable: Boolean,
     onDragEnd: (GeoCoordinate) -> Unit,
 ) {
     val markerState = remember(index) { MarkerState(LatLng(waypoint.latitude, waypoint.longitude)) }
@@ -686,7 +673,7 @@ private fun DraggableManualWaypoint(
     }
     Marker(
         state = markerState,
-        draggable = true,
+        draggable = draggable,
         contentDescription = "Route waypoint ${index + 1}",
         zIndex = 23f,
     )

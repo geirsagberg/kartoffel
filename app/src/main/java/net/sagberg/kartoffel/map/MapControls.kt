@@ -109,6 +109,7 @@ internal fun MapContent(
     onSelectDrawnRoute: (Long) -> Unit = {},
     onRemoveDrawnRoute: (Long) -> Unit = {},
     manualDrawingActive: Boolean = false,
+    drawnRouteSaving: Boolean = false,
     drawnRoutePreview: DrawnRoutePreview = DrawnRoutePreview(),
     onEnterManualDrawing: () -> Unit = {},
     onUndoManualWaypoint: () -> Unit = {},
@@ -130,6 +131,7 @@ internal fun MapContent(
     )
     var confirmDiscard by remember { mutableStateOf(false) }
     BackHandler(enabled = manualDrawingActive) {
+        if (drawnRouteSaving) return@BackHandler
         if (drawnRoutePreview.waypoints.isEmpty()) {
             onCancelManualDrawing()
         } else {
@@ -171,6 +173,7 @@ internal fun MapContent(
         map(
             DrawnRouteMapInteractions(
                 active = manualDrawingActive,
+                editable = manualDrawingActive && !drawnRouteSaving,
                 preview = drawnRoutePreview,
                 onMapClick = onAddManualWaypoint,
                 onWaypointDragEnd = onMoveManualWaypoint,
@@ -198,6 +201,7 @@ internal fun MapContent(
                 onExitTrackingInspection = onExitTrackingInspection,
                 manualDrawingActive = manualDrawingActive,
                 drawnRoutePreview = drawnRoutePreview,
+                drawnRouteSaving = drawnRouteSaving,
                 onUndoManualWaypoint = onUndoManualWaypoint,
                 onCancelManualDrawing = onCancelManualDrawing,
                 onConfirmDrawnRoute = onConfirmDrawnRoute,
@@ -535,6 +539,7 @@ private fun FloatingMapBar(
     onExitTrackingInspection: () -> Unit,
     manualDrawingActive: Boolean,
     drawnRoutePreview: DrawnRoutePreview,
+    drawnRouteSaving: Boolean,
     onUndoManualWaypoint: () -> Unit,
     onCancelManualDrawing: () -> Unit,
     onConfirmDrawnRoute: () -> Unit,
@@ -575,12 +580,14 @@ private fun FloatingMapBar(
                 manualDrawingActive -> {
                     TextButton(
                         onClick = onUndoManualWaypoint,
-                        enabled = drawnRoutePreview.waypoints.isNotEmpty(),
+                        enabled = !drawnRouteSaving && drawnRoutePreview.waypoints.isNotEmpty(),
                     ) { Text("Undo") }
-                    TextButton(onClick = onCancelManualDrawing) { Text("Cancel") }
+                    TextButton(onClick = onCancelManualDrawing, enabled = !drawnRouteSaving) {
+                        Text("Cancel")
+                    }
                     TextButton(
                         onClick = onConfirmDrawnRoute,
-                        enabled = drawnRoutePreview.canConfirm,
+                        enabled = !drawnRouteSaving && drawnRoutePreview.canConfirm,
                     ) { Text("Confirm") }
                 }
                 else -> Box {
