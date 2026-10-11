@@ -235,7 +235,6 @@ internal fun MapContent(
             if (inspectionActive) {
                 TrackingInspectionControls(
                     filter = inspectionFilter,
-                    recordings = inspectionSnapshot?.availableRecordings.orEmpty(),
                     nowMillis = System.currentTimeMillis(),
                     loading = inspectionSnapshot == null,
                     empty = inspectionSnapshot?.let {

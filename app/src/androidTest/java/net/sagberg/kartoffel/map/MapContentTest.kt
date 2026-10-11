@@ -307,7 +307,7 @@ class MapContentTest {
 
         compose.onNodeWithText("Tracking Inspection").assertIsDisplayed()
         compose.onNodeWithTag("inspection_filter_controls").assertIsDisplayed()
-        compose.onNodeWithText("All tracking").assertIsDisplayed()
+        compose.onNodeWithText("Drawn routes").assertIsDisplayed()
         compose.onNodeWithText("All time").assertIsDisplayed()
         compose.onAllNodesWithTag("recording_control").assertCountEquals(0)
         compose.onAllNodesWithContentDescription("Center on current location").assertCountEquals(0)
@@ -339,8 +339,6 @@ class MapContentTest {
         val snapshot = mutableStateOf(
             TrackingInspectionSnapshot(
                 filter = TrackingInspectionFilter.Default,
-                availableScopes = emptyList(),
-                availableRecordings = emptyList(),
                 cells = emptyList(),
                 measurements = TrackingInspectionMeasurements(0, 0, 0),
                 drawnRoutes = listOf(

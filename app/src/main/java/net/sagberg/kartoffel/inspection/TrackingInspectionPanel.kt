@@ -52,14 +52,12 @@ import kotlin.time.Duration.Companion.hours
 @Composable
 internal fun TrackingInspectionControls(
     filter: TrackingInspectionFilter,
-    recordings: List<InspectionRecording>,
     nowMillis: Long,
     loading: Boolean,
     empty: Boolean,
     onFilterChange: (TrackingInspectionFilter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var scopeMenu by remember { mutableStateOf(false) }
     var timeMenu by remember { mutableStateOf(false) }
     var filtersExpanded by rememberSaveable { mutableStateOf(false) }
     val customTime = filter.time as? TrackingInspectionTime.Custom
@@ -69,11 +67,6 @@ internal fun TrackingInspectionControls(
     var customEnd by remember(filter.time) {
         mutableStateOf(customTime?.endMillis?.localDateTime().orEmpty())
     }
-    val scopes = listOf(
-        TrackingInspectionScope.AllTracking,
-        TrackingInspectionScope.AutomaticTracking,
-        TrackingInspectionScope.AllRecordings,
-    ) + recordings.map { TrackingInspectionScope.Recording(it.id) }
     val times = listOf(
         TrackingInspectionTime.AllTime,
         TrackingInspectionTime.Last24Hours(nowMillis),
@@ -94,26 +87,19 @@ internal fun TrackingInspectionControls(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Box {
+                    InspectionSource.entries.forEach { source ->
                         FilterChip(
-                            selected = filter.scope != TrackingInspectionScope.AllTracking,
-                            onClick = { scopeMenu = true },
-                            label = { Text(filter.scope.label(recordings)) },
+                            selected = source in filter.sources,
+                            onClick = {
+                                val sources = if (source in filter.sources) {
+                                    filter.sources - source
+                                } else {
+                                    filter.sources + source
+                                }
+                                onFilterChange(filter.copy(sources = sources))
+                            },
+                            label = { Text(source.label) },
                         )
-                        DropdownMenu(
-                            expanded = scopeMenu,
-                            onDismissRequest = { scopeMenu = false },
-                        ) {
-                            scopes.forEach { scope ->
-                                DropdownMenuItem(
-                                    text = { Text(scope.label(recordings)) },
-                                    onClick = {
-                                        scopeMenu = false
-                                        onFilterChange(filter.copy(scope = scope))
-                                    },
-                                )
-                            }
-                        }
                     }
                     Box {
                         FilterChip(
@@ -158,13 +144,6 @@ internal fun TrackingInspectionControls(
 
             if (filtersExpanded) {
                 HorizontalDivider()
-                FilterGroup(
-                    label = "Scope",
-                    choices = scopes,
-                    selected = filter.scope,
-                    choiceLabel = { it.label(recordings) },
-                    onChange = { onFilterChange(filter.copy(scope = it)) },
-                )
                 FilterGroup(
                     label = "Time",
                     choices = times,
@@ -469,23 +448,11 @@ private fun String.toEpochMillisOrNull(): Long? = runCatching {
         .toEpochMilli()
 }.getOrNull()
 
-private fun TrackingInspectionScope.label(recordings: List<InspectionRecording>): String =
-    when (this) {
-        TrackingInspectionScope.AllTracking -> "All tracking"
-        TrackingInspectionScope.AutomaticTracking -> "Automatic"
-        TrackingInspectionScope.AllRecordings -> "All recordings"
-        is TrackingInspectionScope.Recording ->
-            recordings.firstOrNull { it.id == id }?.displayName ?: "Recording"
-    }
-
-private val InspectionRecording.displayName: String
-    get() {
-        val duration = endedAtMillis?.let { ((it - startedAtMillis) / 60_000).coerceAtLeast(0) }
-        return buildString {
-            append(startedAtMillis.compactTime())
-            append(" · ")
-            append(duration?.let { "$it min" } ?: "Active")
-        }
+private val InspectionSource.label: String
+    get() = when (this) {
+        InspectionSource.Automatic -> "Automatic"
+        InspectionSource.Recordings -> "Recordings"
+        InspectionSource.DrawnRoutes -> "Drawn routes"
     }
 
 private fun TrackingInspectionTime.label(): String = when (this) {
