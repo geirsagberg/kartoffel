@@ -13,7 +13,7 @@ import net.sagberg.kartoffel.coverage.CoverageCellShape
 import net.sagberg.kartoffel.coverage.GeoCoordinate
 import androidx.core.graphics.createBitmap
 
-/** How the line along the edge of visited coverage is drawn over the Fog, in tile pixels. */
+/** How the line along the edge of visited coverage is drawn over the Fog, in pixels of a 1× tile. */
 internal data class CoverageOutlinePaint(
     val color: Int,
     val width: Float,
@@ -33,7 +33,11 @@ internal data class CoverageOutlinePaint(
 internal class FogTileRenderer(
     private val fogColor: Int = Color.argb(185, 24, 29, 36),
     val outline: CoverageOutlinePaint? = null,
+    /** Bitmap pixels per tile pixel. Maps stretches 1× tiles on dense screens and at fractional zoom. */
+    val scale: Int = 1,
 ) {
+    val sizePixels = FOG_TILE_SIZE * scale
+
     private val fullyFoggedPng by lazy {
         renderPngUncached(
             tile = FogTileCoordinate(x = 0, y = 0, zoom = 0),
@@ -55,9 +59,10 @@ internal class FogTileRenderer(
         tile: FogTileCoordinate,
         cellsToClear: List<CoverageCellShape>,
     ): ByteArray {
-        val bitmap = createBitmap(FOG_TILE_SIZE, FOG_TILE_SIZE)
+        val bitmap = createBitmap(sizePixels, sizePixels)
         val canvas = Canvas(bitmap)
         canvas.drawColor(fogColor)
+        canvas.scale(scale.toFloat(), scale.toFloat())
 
         val outlined = outline?.let { paint -> paint to coverageOutline(cellsToClear).toTilePath(tile) }
 
@@ -78,9 +83,8 @@ internal class FogTileRenderer(
             xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
         }
 
-        cellsToClear.forEach { cell ->
-            canvas.drawPath(cell.boundary.toTilePolygon(tile), clearPaint)
-        }
+        // One path, because clearing cells one by one leaves fog along their shared edges.
+        canvas.drawPath(cellsToClear.map { it.boundary }.toTilePath(tile), clearPaint)
 
         outlined?.let { (paint, path) ->
             canvas.drawPath(path, outlineStroke(paint.color, paint.width))

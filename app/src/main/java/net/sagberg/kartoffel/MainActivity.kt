@@ -67,6 +67,7 @@ internal fun KartoffelApp() {
             when (destination) {
                 KartoffelDestination.MAP -> MapScreen(
                     coverageOutline = appearance.coverageOutline,
+                    fogDetail = appearance.fogDetail,
                     menuActions = MapMenuActions(
                         onOpenSettings = { destination = KartoffelDestination.SETTINGS },
                         onOpenAppearance = { appearanceOpen = true },

@@ -77,6 +77,7 @@ import net.sagberg.kartoffel.inspection.TrackingInspectionLoader
 import net.sagberg.kartoffel.inspection.TrackingInspectionSnapshot
 import net.sagberg.kartoffel.inspection.color
 import net.sagberg.kartoffel.settings.CoverageOutlineStyle
+import net.sagberg.kartoffel.settings.FogDetail
 import net.sagberg.kartoffel.settings.color
 import net.sagberg.kartoffel.storage.AutomaticTrackingPreference
 import net.sagberg.kartoffel.storage.AutomaticTrackingPreferences
@@ -89,6 +90,7 @@ import net.sagberg.kartoffel.ui.theme.LocalDarkTheme
 @Composable
 internal fun MapScreen(
     coverageOutline: CoverageOutlineStyle,
+    fogDetail: FogDetail,
     menuActions: MapMenuActions,
 ) {
     val context = LocalContext.current
@@ -140,6 +142,7 @@ internal fun MapScreen(
     ) {
         MapRoute(
             coverageOutline = coverageOutline,
+            fogDetail = fogDetail,
             menuActions = menuActions.copy(
                 onBackupDatabase = {
                     backupLauncher.launch("kartoffel-backup-${System.currentTimeMillis()}.db")
@@ -208,6 +211,7 @@ internal fun DatabaseRestoreGate(
 @SuppressLint("MissingPermission")
 private fun MapRoute(
     coverageOutline: CoverageOutlineStyle,
+    fogDetail: FogDetail,
     menuActions: MapMenuActions,
 ) {
     val context = LocalContext.current
@@ -549,8 +553,8 @@ private fun MapRoute(
                     zIndex = 10f,
                 )
                 // The overlay must be attached before its cache can be cleared.
-                LaunchedEffect(coverageOutlinePaint, coverageRevision) {
-                    fogTileProvider.updateOutline(coverageOutlinePaint)
+                LaunchedEffect(coverageOutlinePaint, fogDetail, coverageRevision) {
+                    fogTileProvider.updateRendering(coverageOutlinePaint, fogDetail.tileScale)
                     fogTileOverlayState.clearTileCache()
                 }
                 if (inspectionActive) {

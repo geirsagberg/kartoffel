@@ -98,10 +98,32 @@ class FogTileProviderTest {
     }
 
     @Test
+    fun edgeSharedByTwoVisitedCellsLeavesNoFog() {
+        val cells = H3CoverageCells()
+        val pair = cells.pathBetween(
+            GeoCoordinate(latitude = 59.9139, longitude = 10.7522),
+            GeoCoordinate(latitude = 59.9139, longitude = 10.7542),
+        ).take(2).map(cells::shapeOf)
+        val shared = pair[0].boundary.filter { vertex ->
+            pair[1].boundary.any { hypot(it.latitude - vertex.latitude, it.longitude - vertex.longitude) < 1e-9 }
+        }
+        check(shared.size == 2) { "Expected adjacent cells" }
+        val midpoint = GeoCoordinate(
+            latitude = shared.map { it.latitude }.average(),
+            longitude = shared.map { it.longitude }.average(),
+        )
+        val tile = fogTileForCoordinate(midpoint, zoom = 17)
+
+        val bitmap = FogTileProvider(CoverageSnapshot(pair)).render(tile)
+
+        assertEquals(0, Color.alpha(bitmap.pixelAt(tile.pixelForCoordinate(midpoint))))
+    }
+
+    @Test
     fun outlineIsDrawnAlongTheEdgeOfVisitedCoverage() {
         val edge = LoneCellEdge()
         val provider = FogTileProvider(edge.snapshot).apply {
-            updateOutline(CoverageOutlinePaint(Color.RED, width = 4f))
+            updateRendering(CoverageOutlinePaint(Color.RED, width = 4f))
         }
 
         val bitmap = provider.render(edge.tile)
@@ -111,6 +133,25 @@ class FogTileProviderTest {
         assertTrue(Color.red(onEdge) > 200 && Color.green(onEdge) < 60)
         assertEquals(0, Color.alpha(bitmap.pixelAt(edge.inside(8f))))
         assertEquals(plainFog, bitmap.getPixel(2, 2))
+    }
+
+    @Test
+    fun higherDetailDrawsTheSameTileWithMorePixels() {
+        val edge = LoneCellEdge()
+        val provider = FogTileProvider(edge.snapshot).apply {
+            updateRendering(CoverageOutlinePaint(Color.RED, width = 4f), scale = 2)
+        }
+
+        val tile = provider.getTile(edge.tile.x, edge.tile.y, edge.tile.zoom)
+            ?: error("Expected Fog provider to return a tile")
+        val bitmap = provider.render(edge.tile)
+
+        assertEquals(512, tile.width)
+        assertEquals(512, bitmap.width)
+        val onEdge = bitmap.pixelAt(edge.midpoint, scale = 2)
+        assertTrue(Color.red(onEdge) > 200 && Color.green(onEdge) < 60)
+        assertEquals(0, Color.alpha(bitmap.pixelAt(edge.inside(8f), scale = 2)))
+        assertEquals(plainFog, bitmap.pixelAt(edge.outside(8f), scale = 2))
     }
 
     @Test
@@ -127,7 +168,7 @@ class FogTileProviderTest {
     fun haloSpreadsIntoTheFogButNotIntoVisitedCoverage() {
         val edge = LoneCellEdge()
         val provider = FogTileProvider(edge.snapshot).apply {
-            updateOutline(
+            updateRendering(
                 CoverageOutlinePaint(
                     color = Color.WHITE,
                     width = 1.5f,
@@ -147,11 +188,11 @@ class FogTileProviderTest {
     fun changingTheOutlineRendersNewTiles() {
         val edge = LoneCellEdge()
         val provider = FogTileProvider(edge.snapshot).apply {
-            updateOutline(CoverageOutlinePaint(Color.RED, width = 4f))
+            updateRendering(CoverageOutlinePaint(Color.RED, width = 4f))
         }
 
-        assertFalse(provider.updateOutline(CoverageOutlinePaint(Color.RED, width = 4f)))
-        assertTrue(provider.updateOutline(CoverageOutlinePaint(Color.BLUE, width = 4f)))
+        assertFalse(provider.updateRendering(CoverageOutlinePaint(Color.RED, width = 4f)))
+        assertTrue(provider.updateRendering(CoverageOutlinePaint(Color.BLUE, width = 4f)))
 
         val onEdge = provider.render(edge.tile).pixelAt(edge.midpoint)
         assertTrue(Color.blue(onEdge) > 200 && Color.red(onEdge) < 60)
@@ -166,7 +207,7 @@ class FogTileProviderTest {
             renderer.renderPng(tile, cells).also {
                 if (changeOutline) {
                     changeOutline = false
-                    provider.updateOutline(CoverageOutlinePaint(Color.BLUE, width = 4f))
+                    provider.updateRendering(CoverageOutlinePaint(Color.BLUE, width = 4f))
                 }
             }
         })
@@ -229,10 +270,10 @@ class FogTileProviderTest {
         return BitmapFactory.decodeByteArray(data, 0, data.size)
     }
 
-    private fun Bitmap.pixelAt(point: TilePixelPoint): Int {
-        val x = point.x.roundToInt()
-        val y = point.y.roundToInt()
-        check(x in 0 until FOG_TILE_SIZE && y in 0 until FOG_TILE_SIZE) {
+    private fun Bitmap.pixelAt(point: TilePixelPoint, scale: Int = 1): Int {
+        val x = (point.x * scale).roundToInt()
+        val y = (point.y * scale).roundToInt()
+        check(x in 0 until width && y in 0 until height) {
             "Probe ($x, $y) is outside the tile"
         }
         return getPixel(x, y)

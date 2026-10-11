@@ -14,6 +14,7 @@ Kartoffel is a local-first Android app that remembers where its user has been an
 - **Map:** the main map showing visited coverage and remaining Fog.
 - **Fog:** the map overlay hiding places outside the user's Street-Level Coverage.
 - **Coverage Outline:** the line drawn along the edge of visited coverage, over the Fog. Its style is a device-local appearance choice.
+- **Fog Detail:** how many pixels the Fog is drawn with. Higher detail keeps coverage edges crisp at more rendering cost. It is a device-local appearance choice and never changes Street-Level Coverage.
 - **Street-Level Coverage:** visited streets, blocks, and similarly small areas.
 - **Coverage Cell:** the H3 area used as the durable unit of visited coverage.
 - **Coverage Compaction:** representing a complete set of fine Coverage Cells by their H3 parent without changing the logical Street-Level Coverage.

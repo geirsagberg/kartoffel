@@ -14,6 +14,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import net.sagberg.kartoffel.settings.Appearance
 import net.sagberg.kartoffel.settings.AppearancePreferences
 import net.sagberg.kartoffel.settings.CoverageOutlineStyle
+import net.sagberg.kartoffel.settings.FogDetail
 import net.sagberg.kartoffel.settings.ThemeMode
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -65,6 +66,7 @@ class KartoffelAppTest {
         compose.onNodeWithText("Appearance").performClick()
         compose.onNodeWithText("System").assertIsSelected()
         compose.onNodeWithText("Teal").assertIsSelected()
+        compose.onNodeWithText("Medium").assertIsSelected()
 
         compose.onNodeWithText("Dark").performClick()
         compose.runOnIdle {
@@ -73,11 +75,12 @@ class KartoffelAppTest {
             assertEquals(false, bars.isAppearanceLightNavigationBars)
         }
         compose.onNodeWithText("Halo").performClick()
+        compose.onNodeWithText("High").performClick()
         compose.onNodeWithText("Done").performClick()
 
         compose.runOnIdle {
             assertEquals(
-                Appearance(ThemeMode.Dark, CoverageOutlineStyle.Halo),
+                Appearance(ThemeMode.Dark, CoverageOutlineStyle.Halo, FogDetail.High),
                 appearancePreferences.load(),
             )
         }
@@ -85,6 +88,7 @@ class KartoffelAppTest {
         compose.onNodeWithText("Appearance").performClick()
         compose.onNodeWithText("Dark").assertIsSelected()
         compose.onNodeWithText("Halo").assertIsSelected()
+        compose.onNodeWithText("High").assertIsSelected()
         compose.onNodeWithText("Light").performClick()
         compose.runOnIdle {
             val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
