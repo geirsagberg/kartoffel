@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -24,6 +27,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.pressBack
 import net.sagberg.kartoffel.diagnostics.LatestFixDiagnostics
@@ -44,6 +48,7 @@ import net.sagberg.kartoffel.inspection.InspectionDrawnRoute
 import net.sagberg.kartoffel.tracking.RecordingActivity
 import org.junit.Rule
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MapContentTest {
@@ -88,12 +93,37 @@ class MapContentTest {
         compose.onNodeWithTag("fake_google_map").assertIsDisplayed()
         compose.onNodeWithText("Enable location", useUnmergedTree = true).assertIsDisplayed()
         compose.onAllNodesWithContentDescription("Center on current location").assertCountEquals(0)
-        compose.onNodeWithTag("automatic_tracking_status").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Draw route").assertIsDisplayed()
         compose.onNodeWithTag("enable_location_control").assertIsDisplayed()
         compose.onAllNodesWithTag("recording_control").assertCountEquals(0)
         compose.onNodeWithTag("settings_diagnostics_menu").assertIsDisplayed()
         compose.onAllNodesWithTag("start_recording_icon", useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithText("Walking · 5 s").assertCountEquals(0)
+    }
+
+    @Test
+    fun floatingBarShowsTheTitleWithoutRoutineTrackingStatus() {
+        compose.setMapContent(hasLocationPermission = true, isAutomaticTrackingEnabled = true)
+
+        compose.onNodeWithText("Kartoffel").assertIsDisplayed()
+        compose.onNodeWithContentDescription("More options").assertIsDisplayed()
+        compose.onAllNodesWithText("Automatic", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun drawRouteAndLocationSitAboveTheRecordButton() {
+        compose.setMapContent(hasLocationPermission = true)
+
+        val draw = compose.onNodeWithContentDescription("Draw route").getUnclippedBoundsInRoot()
+        val location = compose.onNodeWithContentDescription("Center on current location")
+            .getUnclippedBoundsInRoot()
+        val record = compose.onNodeWithTag("recording_control").getUnclippedBoundsInRoot()
+
+        assertTrue(draw.bottom <= location.top)
+        assertTrue(location.bottom <= record.top)
+        assertTrue(record.height >= 64.dp)
+        assertTrue(record.width > location.width)
+        compose.onNodeWithText("Record", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -111,6 +141,7 @@ class MapContentTest {
         var inspectionOpened = false
         var backupOpened = false
         var restoreOpened = false
+        var appearanceOpened = false
         compose.setMapContent(
             hasLocationPermission = true,
             onOpenSettings = { settingsOpened = true },
@@ -118,6 +149,7 @@ class MapContentTest {
             onEnterTrackingInspection = { inspectionOpened = true },
             onBackupDatabase = { backupOpened = true },
             onRestoreDatabase = { restoreOpened = true },
+            onOpenAppearance = { appearanceOpened = true },
         )
 
         compose.onNodeWithContentDescription("More options").performClick()
@@ -143,6 +175,9 @@ class MapContentTest {
         compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Restore database").performClick()
         compose.runOnIdle { assertEquals(true, restoreOpened) }
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Appearance").performClick()
+        compose.runOnIdle { assertEquals(true, appearanceOpened) }
     }
 
     @Test
@@ -187,7 +222,8 @@ class MapContentTest {
                         preview.value = DrawnRoutePreview()
                     },
                     map = { interactions ->
-                        Column {
+                        // Centred so that the floating bar over the map does not cover them.
+                        Column(Modifier.align(Alignment.Center)) {
                             Box(
                                 Modifier.size(48.dp).testTag("fake_map_tap").clickable {
                                     val next = interactions.preview.waypoints.size + 1.0
@@ -211,12 +247,12 @@ class MapContentTest {
             }
         }
 
-        compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Draw route").performClick()
+        compose.onNodeWithContentDescription("Draw route").performClick()
         compose.onNodeWithText("Draw route").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Draw route").assertCountEquals(0)
         compose.onNodeWithText("Undo").assertIsNotEnabled()
         compose.onNodeWithText("Confirm").assertIsNotEnabled()
-        compose.onNodeWithText("Stop recording", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Stop", useUnmergedTree = true).assertIsDisplayed()
 
         compose.onNodeWithTag("fake_map_tap").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
@@ -257,7 +293,7 @@ class MapContentTest {
         compose.onNodeWithText("Draw route").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
-        compose.onNodeWithText("Stop recording", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Stop", useUnmergedTree = true).performClick()
         compose.runOnIdle { assertEquals(true, stoppedRecording) }
         compose.onNodeWithText("Confirm").performClick()
         compose.runOnIdle { assertEquals(true, confirmed) }
@@ -280,6 +316,7 @@ class MapContentTest {
         compose.onNodeWithText("All time").assertIsDisplayed()
         compose.onAllNodesWithTag("recording_control").assertCountEquals(0)
         compose.onAllNodesWithContentDescription("Center on current location").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Draw route").assertCountEquals(0)
         compose.onAllNodesWithTag("live_diagnostics_panel").assertCountEquals(0)
         compose.onAllNodesWithTag("settings_diagnostics_menu").assertCountEquals(0)
         compose.onNodeWithTag("exit_tracking_inspection").performClick()
@@ -465,10 +502,12 @@ class MapContentTest {
 
         compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Enable automatic tracking").performClick()
-        compose.onNodeWithText("Automatic on").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(true, automaticEnabled.value) }
         compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Disable automatic tracking").performClick()
-        compose.onNodeWithText("Automatic off").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(false, automaticEnabled.value) }
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Enable automatic tracking").assertIsDisplayed()
     }
 
     @Test
@@ -502,12 +541,12 @@ class MapContentTest {
             }
         }
 
-        compose.onNodeWithText("Start recording", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Record", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("start_recording_icon", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("recording_control").performClick()
         compose.runOnIdle { assertEquals(true, requestedRecording.value) }
         compose.onNodeWithTag("stop_recording_icon", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Recording · Automatic off").assertIsDisplayed()
-        compose.onNodeWithText("Stop recording", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Stop", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("recording_control").performClick()
         compose.runOnIdle { assertEquals(false, requestedRecording.value) }
     }
@@ -632,6 +671,7 @@ class MapContentTest {
         onOpenTrackingDiagnostics: () -> Unit = {},
         onBackupDatabase: () -> Unit = {},
         onRestoreDatabase: () -> Unit = {},
+        onOpenAppearance: () -> Unit = {},
         inspectionActive: Boolean = false,
         onEnterTrackingInspection: () -> Unit = {},
         onExitTrackingInspection: () -> Unit = {},
@@ -652,6 +692,7 @@ class MapContentTest {
                     onOpenTrackingDiagnostics = onOpenTrackingDiagnostics,
                     onBackupDatabase = onBackupDatabase,
                     onRestoreDatabase = onRestoreDatabase,
+                    onOpenAppearance = onOpenAppearance,
                     inspectionActive = inspectionActive,
                     onEnterTrackingInspection = onEnterTrackingInspection,
                     onExitTrackingInspection = onExitTrackingInspection,
