@@ -1,0 +1,8 @@
+a-current z17: 2.6 ms/tile, 5 KiB/tile png, 256px = 256 KiB decoded
+a-current z15: 1.7 ms/tile, 4 KiB/tile png, 256px = 256 KiB decoded
+b-union z17: 3.1 ms/tile, 3 KiB/tile png, 256px = 256 KiB decoded
+b-union z15: 1.4 ms/tile, 3 KiB/tile png, 256px = 256 KiB decoded
+c-union-2x z17: 7.0 ms/tile, 7 KiB/tile png, 512px = 1024 KiB decoded
+c-union-2x z15: 5.7 ms/tile, 8 KiB/tile png, 512px = 1024 KiB decoded
+d-union-3x z17: 15.7 ms/tile, 12 KiB/tile png, 768px = 2304 KiB decoded
+d-union-3x z15: 8.8 ms/tile, 14 KiB/tile png, 768px = 2304 KiB decoded

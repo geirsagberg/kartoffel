@@ -10,13 +10,14 @@ internal class FogTileProvider(
     initialCoverage: CoverageSnapshot,
     private val renderPng: (FogTileRenderer, FogTileCoordinate, List<CoverageCellShape>) -> ByteArray =
         FogTileRenderer::renderPng,
+    private val makeRenderer: (CoverageOutlinePaint?) -> FogTileRenderer = { FogTileRenderer(outline = it) },
 ) : TileProvider {
     private data class RenderState(
         val coverage: CoverageSnapshot,
         val renderer: FogTileRenderer,
     )
 
-    private val state = AtomicReference(RenderState(initialCoverage, FogTileRenderer()))
+    private val state = AtomicReference(RenderState(initialCoverage, makeRenderer(null)))
 
     fun updateCoverage(snapshot: CoverageSnapshot) {
         state.updateAndGet { it.copy(coverage = snapshot) }
@@ -28,7 +29,7 @@ internal class FogTileProvider(
             if (it.renderer.outline == outline) {
                 it
             } else {
-                it.copy(renderer = FogTileRenderer(outline = outline))
+                it.copy(renderer = makeRenderer(outline))
             }
         }
         return previous.renderer.outline != outline
@@ -52,7 +53,7 @@ internal class FogTileProvider(
 
                 // An in-flight tile may finish after the overlay's cache has been cleared.
                 // Returning null asks Maps to retry instead of caching an obsolete tile.
-                if (state.get() !== renderingState) null else Tile(FOG_TILE_SIZE, FOG_TILE_SIZE, bytes)
+                if (state.get() !== renderingState) null else Tile(renderer.sizePixels, renderer.sizePixels, bytes)
             }
         } catch (failure: Exception) {
             when (fogTileFailureHandlingFor(failure)) {

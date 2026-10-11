@@ -33,7 +33,11 @@ internal data class CoverageOutlinePaint(
 internal class FogTileRenderer(
     private val fogColor: Int = Color.argb(185, 24, 29, 36),
     val outline: CoverageOutlinePaint? = null,
+    val scale: Int = 1,
+    private val unionClear: Boolean = false,
 ) {
+    val sizePixels = FOG_TILE_SIZE * scale
+
     private val fullyFoggedPng by lazy {
         renderPngUncached(
             tile = FogTileCoordinate(x = 0, y = 0, zoom = 0),
@@ -55,9 +59,10 @@ internal class FogTileRenderer(
         tile: FogTileCoordinate,
         cellsToClear: List<CoverageCellShape>,
     ): ByteArray {
-        val bitmap = createBitmap(FOG_TILE_SIZE, FOG_TILE_SIZE)
+        val bitmap = createBitmap(sizePixels, sizePixels)
         val canvas = Canvas(bitmap)
         canvas.drawColor(fogColor)
+        canvas.scale(scale.toFloat(), scale.toFloat())
 
         val outlined = outline?.let { paint -> paint to coverageOutline(cellsToClear).toTilePath(tile) }
 
@@ -78,8 +83,12 @@ internal class FogTileRenderer(
             xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
         }
 
-        cellsToClear.forEach { cell ->
-            canvas.drawPath(cell.boundary.toTilePolygon(tile), clearPaint)
+        if (unionClear) {
+            canvas.drawPath(cellsToClear.map { it.boundary }.toTilePath(tile), clearPaint)
+        } else {
+            cellsToClear.forEach { cell ->
+                canvas.drawPath(cell.boundary.toTilePolygon(tile), clearPaint)
+            }
         }
 
         outlined?.let { (paint, path) ->
