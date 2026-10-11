@@ -36,6 +36,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        managedDevices {
+            localDevices {
+                create("pixel9Api36") {
+                    device = "Pixel 9"
+                    apiLevel = 36
+                    systemImageSource = "google_apis_playstore"
+                }
+            }
+        }
+    }
+
 }
 
 kotlin {
