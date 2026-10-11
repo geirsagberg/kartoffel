@@ -25,14 +25,14 @@ internal class FusedRecordingActivityUpdates(
     private val transitionPendingIntent = PendingIntent.getService(
         appContext,
         0,
-        Intent(appContext, RecordingSessionService::class.java)
+        Intent(appContext, RecordingService::class.java)
             .setAction(ACTION_ACTIVITY_TRANSITION),
         PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
     private val bootstrapPendingIntent = PendingIntent.getService(
         appContext,
         1,
-        Intent(appContext, RecordingSessionService::class.java)
+        Intent(appContext, RecordingService::class.java)
             .setAction(ACTION_ACTIVITY_BOOTSTRAP),
         PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )

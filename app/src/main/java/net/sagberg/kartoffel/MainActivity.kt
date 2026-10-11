@@ -13,7 +13,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import net.sagberg.kartoffel.diagnostics.TrackingDiagnosticsRoute
-import net.sagberg.kartoffel.map.CoverageMapScreen
+import net.sagberg.kartoffel.map.MapScreen
 import net.sagberg.kartoffel.settings.CoverageSettingsRoute
 import net.sagberg.kartoffel.ui.theme.KartoffelTheme
 
@@ -38,7 +38,7 @@ internal fun KartoffelApp() {
     val settingsPersistenceScope = rememberCoroutineScope()
     KartoffelTheme {
         when (destination) {
-            KartoffelDestination.MAP -> CoverageMapScreen(
+            KartoffelDestination.MAP -> MapScreen(
                 onOpenSettings = { destination = KartoffelDestination.SETTINGS },
                 onOpenTrackingDiagnostics = {
                     destination = KartoffelDestination.TRACKING_DIAGNOSTICS

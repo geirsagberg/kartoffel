@@ -41,30 +41,30 @@ internal class TrackingInspectionLoader(
             val samples = when (val scope = filter.scope) {
                 TrackingInspectionScope.AllTracking ->
                     database.locationSamples().inspectionAll(startMillis, endMillis)
-                TrackingInspectionScope.PassiveTracking ->
-                    database.locationSamples().inspectionPassive(startMillis, endMillis)
-                TrackingInspectionScope.AllRecordingSessions ->
-                    database.locationSamples().inspectionRecordingSessions(startMillis, endMillis)
-                is TrackingInspectionScope.RecordingSession ->
-                    database.locationSamples().inspectionRecordingSession(
+                TrackingInspectionScope.AutomaticTracking ->
+                    database.locationSamples().inspectionAutomatic(startMillis, endMillis)
+                TrackingInspectionScope.AllRecordings ->
+                    database.locationSamples().inspectionRecordings(startMillis, endMillis)
+                is TrackingInspectionScope.Recording ->
+                    database.locationSamples().inspectionRecording(
                         scope.id,
                         startMillis,
                         endMillis,
                     )
             }
-            val sessions = database.recordingSessions().all()
+            val recordings = database.recordings().all()
             val durableEvidence = database.coverageCells().all()
-            val manualRouteClaims = database.manualRouteClaims().allClaims().map { claim ->
-                InspectionManualRouteClaim(
-                    id = claim.id,
-                    createdAtMillis = claim.createdAtMillis,
-                    cells = database.manualRouteClaims().cellsForClaim(claim.id).map { cellId ->
+            val drawnRoutes = database.drawnRoutes().allRoutes().map { route ->
+                InspectionDrawnRoute(
+                    id = route.id,
+                    createdAtMillis = route.createdAtMillis,
+                    cells = database.drawnRoutes().cellsForRoute(route.id).map { cellId ->
                         h3.shapeOf(CoverageCellId(cellId))
                     },
                 )
             }
-            val sessionPoints = (filter.scope as? TrackingInspectionScope.RecordingSession)?.let {
-                database.recordingSessionPoints().forSession(it.id)
+            val recordingPoints = (filter.scope as? TrackingInspectionScope.Recording)?.let {
+                database.recordingPoints().forRecording(it.id)
             }.orEmpty()
             val queried = clock.elapsedRealtimeMillis()
             coroutineContext.ensureActive()
@@ -76,12 +76,12 @@ internal class TrackingInspectionLoader(
                 aggregates.getOrPut(cellId) { MutableDiagnosticCell(cellId) }.samples += sample
             }
             when (filter.scope) {
-                is TrackingInspectionScope.RecordingSession -> {
-                    sessionPoints.filter { point ->
+                is TrackingInspectionScope.Recording -> {
+                    recordingPoints.filter { point ->
                         point.capturedAtMillis >= startMillis && point.capturedAtMillis < endMillis
                     }.forEach { point ->
                         aggregates.getOrPut(point.cellId) { MutableDiagnosticCell(point.cellId) }
-                            .addSessionEvidence(point.capturedAtMillis)
+                            .addRecordingEvidence(point.capturedAtMillis)
                     }
                 }
                 else -> durableEvidence
@@ -109,15 +109,15 @@ internal class TrackingInspectionLoader(
                 filter = filter,
                 availableScopes = listOf(
                     TrackingInspectionScope.AllTracking,
-                    TrackingInspectionScope.PassiveTracking,
-                    TrackingInspectionScope.AllRecordingSessions,
-                ) + sessions.map { TrackingInspectionScope.RecordingSession(it.id) },
-                availableRecordingSessions = sessions.map {
-                    InspectionRecordingSession(it.id, it.startedAtMillis, it.endedAtMillis)
+                    TrackingInspectionScope.AutomaticTracking,
+                    TrackingInspectionScope.AllRecordings,
+                ) + recordings.map { TrackingInspectionScope.Recording(it.id) },
+                availableRecordings = recordings.map {
+                    InspectionRecording(it.id, it.startedAtMillis, it.endedAtMillis)
                 },
                 cells = cells,
                 measurements = measurements,
-                manualRouteClaims = manualRouteClaims,
+                drawnRoutes = drawnRoutes,
             )
             val total = prepared - started
             if (total > SLOW_LOAD_MILLIS) {
@@ -134,14 +134,14 @@ internal class TrackingInspectionLoader(
 
     private class MutableDiagnosticCell(val cellId: Long) {
         val samples = mutableListOf<LocationSampleEntity>()
-        var passiveObserved = false
+        var automaticObserved = false
         var recordingObserved = false
-        var passiveInferred = false
+        var automaticInferred = false
         var recordingInferred = false
         var firstEvidenceMillis: Long? = null
         var lastEvidenceMillis: Long? = null
 
-        fun addSessionEvidence(capturedAtMillis: Long) {
+        fun addRecordingEvidence(capturedAtMillis: Long) {
             recordingObserved = true
             firstEvidenceMillis = minOf(firstEvidenceMillis ?: Long.MAX_VALUE, capturedAtMillis)
             lastEvidenceMillis = maxOf(lastEvidenceMillis ?: Long.MIN_VALUE, capturedAtMillis)
@@ -149,29 +149,29 @@ internal class TrackingInspectionLoader(
 
         fun addEvidence(entity: CoverageCellEntity, scope: TrackingInspectionScope) {
             val mask = entity.evidenceMask
-            if (scope != TrackingInspectionScope.AllRecordingSessions) {
-                passiveObserved = mask has CoverageEvidenceSource.PASSIVE_TRACKING.observedBit
-                passiveInferred = mask has CoverageEvidenceSource.PASSIVE_TRACKING.inferredBit
+            if (scope != TrackingInspectionScope.AllRecordings) {
+                automaticObserved = mask has CoverageEvidenceSource.AUTOMATIC_TRACKING.observedBit
+                automaticInferred = mask has CoverageEvidenceSource.AUTOMATIC_TRACKING.inferredBit
             }
-            if (scope != TrackingInspectionScope.PassiveTracking) {
-                recordingObserved = mask has CoverageEvidenceSource.RECORDING_SESSION.observedBit
-                recordingInferred = mask has CoverageEvidenceSource.RECORDING_SESSION.inferredBit
+            if (scope != TrackingInspectionScope.AutomaticTracking) {
+                recordingObserved = mask has CoverageEvidenceSource.RECORDING.observedBit
+                recordingInferred = mask has CoverageEvidenceSource.RECORDING.inferredBit
             }
-            if (passiveObserved || recordingObserved || passiveInferred || recordingInferred) {
+            if (automaticObserved || recordingObserved || automaticInferred || recordingInferred) {
                 firstEvidenceMillis = minOf(firstEvidenceMillis ?: Long.MAX_VALUE, entity.firstSeenAtMillis)
                 lastEvidenceMillis = maxOf(lastEvidenceMillis ?: Long.MIN_VALUE, entity.lastSeenAtMillis)
             }
         }
 
         fun toModel(h3: H3CoverageCells): DiagnosticSampleCell {
-            passiveObserved = passiveObserved || samples.any {
-                it.accepted && it.source == CoverageEvidenceSource.PASSIVE_TRACKING.persistedName
+            automaticObserved = automaticObserved || samples.any {
+                it.accepted && it.source == CoverageEvidenceSource.AUTOMATIC_TRACKING.persistedName
             }
             recordingObserved = recordingObserved || samples.any {
-                it.accepted && it.source == CoverageEvidenceSource.RECORDING_SESSION.persistedName
+                it.accepted && it.source == CoverageEvidenceSource.RECORDING.persistedName
             }
-            val observed = passiveObserved || recordingObserved
-            val inferred = passiveInferred || recordingInferred
+            val observed = automaticObserved || recordingObserved
+            val inferred = automaticInferred || recordingInferred
             val accepted = samples.count(LocationSampleEntity::accepted)
             val sampleFirst = samples.minOfOrNull { it.capturedAtMillis }
             val sampleLast = samples.maxOfOrNull { it.capturedAtMillis }
@@ -184,20 +184,20 @@ internal class TrackingInspectionLoader(
                     else -> DiagnosticCellState.RejectedOnly
                 },
                 provenance = buildSet {
-                    if (passiveObserved) add(DiagnosticProvenance.PassiveObserved)
+                    if (automaticObserved) add(DiagnosticProvenance.AutomaticObserved)
                     if (recordingObserved) add(DiagnosticProvenance.RecordingObserved)
-                    if (passiveInferred) add(DiagnosticProvenance.PassiveInferred)
+                    if (automaticInferred) add(DiagnosticProvenance.AutomaticInferred)
                     if (recordingInferred) add(DiagnosticProvenance.RecordingInferred)
                     if (samples.any {
                             !it.accepted &&
-                                it.source == CoverageEvidenceSource.PASSIVE_TRACKING.persistedName
+                                it.source == CoverageEvidenceSource.AUTOMATIC_TRACKING.persistedName
                         }
                     ) {
-                        add(DiagnosticProvenance.PassiveRejected)
+                        add(DiagnosticProvenance.AutomaticRejected)
                     }
                     if (samples.any {
                             !it.accepted &&
-                                it.source == CoverageEvidenceSource.RECORDING_SESSION.persistedName
+                                it.source == CoverageEvidenceSource.RECORDING.persistedName
                         }
                     ) {
                         add(DiagnosticProvenance.RecordingRejected)
@@ -237,9 +237,9 @@ private fun TrackingInspectionTime.bounds(): Pair<Long, Long> = when (this) {
 private val TrackingInspectionScope.kind: String
     get() = when (this) {
         TrackingInspectionScope.AllTracking -> "all"
-        TrackingInspectionScope.PassiveTracking -> "passive"
-        TrackingInspectionScope.AllRecordingSessions -> "recording_all"
-        is TrackingInspectionScope.RecordingSession -> "recording_one"
+        TrackingInspectionScope.AutomaticTracking -> "automatic"
+        TrackingInspectionScope.AllRecordings -> "recording_all"
+        is TrackingInspectionScope.Recording -> "recording_one"
     }
 
 private val TrackingInspectionTime.kind: String
@@ -256,7 +256,7 @@ private fun LocationSampleEntity.toDiagnosticSample() = DiagnosticSample(
     accuracyMeters = accuracyMeters,
     source = source,
     trigger = trigger,
-    recordingSessionId = recordingSessionId,
+    recordingId = recordingId,
     activityMode = activityMode,
     accepted = accepted,
     rejectionReason = rejectionReason,

@@ -13,14 +13,14 @@ import kotlinx.coroutines.flow.map
 internal data class TrackingSettingsEntity(
     @PrimaryKey
     val id: Int = SINGLETON_ID,
-    @ColumnInfo(name = "passive_enabled")
-    val passiveEnabled: Boolean,
-    @ColumnInfo(name = "passive_period_started_at_ms")
-    val passivePeriodStartedAtMillis: Long?,
+    @ColumnInfo(name = "automatic_enabled")
+    val automaticEnabled: Boolean,
+    @ColumnInfo(name = "automatic_period_started_at_ms")
+    val automaticPeriodStartedAtMillis: Long?,
 ) {
     init {
         require(id == SINGLETON_ID)
-        require(passiveEnabled == (passivePeriodStartedAtMillis != null))
+        require(automaticEnabled == (automaticPeriodStartedAtMillis != null))
     }
 
     companion object {
@@ -40,31 +40,31 @@ internal interface TrackingSettingsDao {
     suspend fun upsert(settings: TrackingSettingsEntity)
 }
 
-internal data class PassiveTrackingPreference(
+internal data class AutomaticTrackingPreference(
     val enabled: Boolean,
-    val passivePeriodStartedAtMillis: Long?,
+    val automaticPeriodStartedAtMillis: Long?,
 ) {
     companion object {
-        val Disabled = PassiveTrackingPreference(
+        val Disabled = AutomaticTrackingPreference(
             enabled = false,
-            passivePeriodStartedAtMillis = null,
+            automaticPeriodStartedAtMillis = null,
         )
     }
 }
 
-internal class PassiveTrackingPreferences(
+internal class AutomaticTrackingPreferences(
     private val dao: TrackingSettingsDao,
 ) {
-    fun observe(): Flow<PassiveTrackingPreference> = dao.observe().map { it.toPreference() }
+    fun observe(): Flow<AutomaticTrackingPreference> = dao.observe().map { it.toPreference() }
 
-    suspend fun current(): PassiveTrackingPreference = dao.current().toPreference()
+    suspend fun current(): AutomaticTrackingPreference = dao.current().toPreference()
 
-    suspend fun enable(passivePeriodStartedAtMillis: Long) {
-        require(passivePeriodStartedAtMillis >= 0)
+    suspend fun enable(automaticPeriodStartedAtMillis: Long) {
+        require(automaticPeriodStartedAtMillis >= 0)
         dao.upsert(
             TrackingSettingsEntity(
-                passiveEnabled = true,
-                passivePeriodStartedAtMillis = passivePeriodStartedAtMillis,
+                automaticEnabled = true,
+                automaticPeriodStartedAtMillis = automaticPeriodStartedAtMillis,
             ),
         )
     }
@@ -72,15 +72,15 @@ internal class PassiveTrackingPreferences(
     suspend fun disable() {
         dao.upsert(
             TrackingSettingsEntity(
-                passiveEnabled = false,
-                passivePeriodStartedAtMillis = null,
+                automaticEnabled = false,
+                automaticPeriodStartedAtMillis = null,
             ),
         )
     }
 }
 
-private fun TrackingSettingsEntity?.toPreference(): PassiveTrackingPreference =
-    PassiveTrackingPreference(
-        enabled = this?.passiveEnabled ?: false,
-        passivePeriodStartedAtMillis = this?.passivePeriodStartedAtMillis,
+private fun TrackingSettingsEntity?.toPreference(): AutomaticTrackingPreference =
+    AutomaticTrackingPreference(
+        enabled = this?.automaticEnabled ?: false,
+        automaticPeriodStartedAtMillis = this?.automaticPeriodStartedAtMillis,
     )

@@ -25,7 +25,7 @@ class KartoffelDatabaseMigrationTest {
     }
 
     @Test
-    fun migrationsPreserveFixesAndRelationshipsAndAddPassivePreference() = runBlocking {
+    fun migrationsPreserveFixesAndRelationshipsAndAddAutomaticPreference() = runBlocking {
         createVersionTwoDatabase()
 
         val database = Room.databaseBuilder(context, KartoffelDatabase::class.java, databaseName)
@@ -37,17 +37,20 @@ class KartoffelDatabaseMigrationTest {
                 MIGRATION_5_6,
                 MIGRATION_6_7,
                 MIGRATION_7_8,
+                MIGRATION_8_9,
             )
             .allowMainThreadQueries()
             .build()
         try {
             val sample = database.locationSamples().find(11)
             assertEquals("unknown", sample?.activityMode)
-            assertEquals(7L, sample?.recordingSessionId)
-            assertNotNull(database.recordingSessions().find(7))
+            assertEquals("recording", sample?.source)
+            assertEquals("active_recording", sample?.trigger)
+            assertEquals(7L, sample?.recordingId)
+            assertNotNull(database.recordings().find(7))
             assertEquals(
                 listOf(11L, 12L),
-                database.recordingSessionPoints().forSession(7).map { it.sampleId },
+                database.recordingPoints().forRecording(7).map { it.sampleId },
             )
             val coverage = database.coverageCells().all().associateBy { it.cellId }
             val mergedCoverage = coverage.getValue(621665607470907391L)
@@ -66,17 +69,89 @@ class KartoffelDatabaseMigrationTest {
             )
             assertEquals(
                 listOf(621665607470907391L, 617162007843700735L),
-                database.recordingSessionPoints().forSession(7).map { it.cellId },
+                database.recordingPoints().forRecording(7).map { it.cellId },
             )
-            assertEquals(false, PassiveTrackingPreferences(database.trackingSettings()).current().enabled)
+            assertEquals(false, AutomaticTrackingPreferences(database.trackingSettings()).current().enabled)
             assertEquals(
                 CoverageSettings.Default,
                 RoomCoverageSettings(database.coverageSettings()).current(),
             )
-            assertEquals(emptyList<ManualRouteClaimSummary>(), database.manualRouteClaims().allClaims())
-            assertEquals(emptyList<Long>(), database.manualRouteClaims().allCellIds())
+            assertEquals(emptyList<DrawnRouteSummary>(), database.drawnRoutes().allRoutes())
+            assertEquals(emptyList<Long>(), database.drawnRoutes().allCellIds())
         } finally {
             database.close()
+        }
+    }
+
+    @Test
+    fun renameMigrationPreservesDrawnRoutesTrackingAndSettings() = runBlocking {
+        createVersionEightDatabase()
+
+        val database = Room.databaseBuilder(context, KartoffelDatabase::class.java, databaseName)
+            .setDriver(AndroidSQLiteDriver())
+            .addMigrations(MIGRATION_8_9)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            assertEquals(listOf(DrawnRouteSummary(3, 100)), database.drawnRoutes().allRoutes())
+            assertEquals(
+                listOf(617162007843700735L, 621665607470907391L),
+                database.drawnRoutes().cellsForRoute(3),
+            )
+            assertEquals(
+                AutomaticTrackingPreference(enabled = true, automaticPeriodStartedAtMillis = 50),
+                AutomaticTrackingPreferences(database.trackingSettings()).current(),
+            )
+            assertEquals(
+                5,
+                RoomCoverageSettings(database.coverageSettings()).current()
+                    .maximumInterpolationDistanceSteps,
+            )
+            val rejected = database.locationSamples().find(21)
+            assertEquals("automatic_tracking", rejected?.source)
+            assertEquals("accuracy_exceeds_automatic_limit", rejected?.rejectionReason)
+            assertEquals(7L, database.locationSamples().find(11)?.recordingId)
+            assertEquals(
+                listOf(11L, 12L),
+                database.recordingPoints().forRecording(7).map { it.sampleId },
+            )
+
+            database.drawnRoutes().remove(3)
+            assertEquals(emptyList<Long>(), database.drawnRoutes().allCellIds())
+        } finally {
+            database.close()
+        }
+    }
+
+    private suspend fun createVersionEightDatabase() {
+        createVersionTwoDatabase()
+        AndroidSQLiteDriver().open(context.getDatabasePath(databaseName).absolutePath).use { db ->
+            listOf(
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+            ).forEach { it.migrate(db) }
+            db.execSQL("PRAGMA user_version = 8")
+            db.execSQL("INSERT INTO manual_route_claims (id, created_at_ms) VALUES (3, 100)")
+            db.execSQL(
+                "INSERT INTO manual_route_claim_cells (claim_id, cell_id) " +
+                    "VALUES (3, 617162007843700735), (3, 621665607470907391)",
+            )
+            db.execSQL(
+                "INSERT INTO tracking_settings " +
+                    "(id, passive_enabled, passive_period_started_at_ms) VALUES (1, 1, 50)",
+            )
+            db.execSQL("UPDATE coverage_settings SET maximum_interpolation_gap_steps = 5")
+            db.execSQL(
+                "INSERT INTO location_samples " +
+                    "(id, captured_at_ms, latitude, longitude, accuracy_meters, source, " +
+                    "trigger, accepted, rejection_reason, recording_session_id) " +
+                    "VALUES (21, 3000, 59.91, 10.75, 80.0, 'passive_tracking', " +
+                    "'movement_window', 0, 'accuracy_exceeds_passive_limit', NULL)",
+            )
         }
     }
 

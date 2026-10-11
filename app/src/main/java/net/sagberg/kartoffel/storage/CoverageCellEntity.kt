@@ -27,8 +27,8 @@ internal enum class CoverageEvidenceSource(
     val observedBit: Int,
     val inferredBit: Int,
 ) {
-    PASSIVE_TRACKING("passive_tracking", observedBit = 1, inferredBit = 4),
-    RECORDING_SESSION("recording_session", observedBit = 2, inferredBit = 8),
+    AUTOMATIC_TRACKING("automatic_tracking", observedBit = 1, inferredBit = 4),
+    RECORDING("recording", observedBit = 2, inferredBit = 8),
 }
 
 internal fun evidenceMaskOf(vararg sources: CoverageEvidenceSource): Int =

@@ -6,9 +6,9 @@ import net.sagberg.kartoffel.coverage.CoverageCellShape
 
 internal sealed interface TrackingInspectionScope {
     data object AllTracking : TrackingInspectionScope
-    data object PassiveTracking : TrackingInspectionScope
-    data object AllRecordingSessions : TrackingInspectionScope
-    data class RecordingSession(val id: Long) : TrackingInspectionScope
+    data object AutomaticTracking : TrackingInspectionScope
+    data object AllRecordings : TrackingInspectionScope
+    data class Recording(val id: Long) : TrackingInspectionScope
 }
 
 internal sealed interface TrackingInspectionTime {
@@ -37,11 +37,11 @@ internal data class TrackingInspectionFilter(
 internal enum class DiagnosticCellState { Observed, Inferred, RejectedOnly }
 
 internal enum class DiagnosticProvenance {
-    PassiveObserved,
+    AutomaticObserved,
     RecordingObserved,
-    PassiveInferred,
+    AutomaticInferred,
     RecordingInferred,
-    PassiveRejected,
+    AutomaticRejected,
     RecordingRejected,
 }
 
@@ -53,7 +53,7 @@ internal data class DiagnosticSample(
     val accuracyMeters: Double,
     val source: String,
     val trigger: String?,
-    val recordingSessionId: Long?,
+    val recordingId: Long?,
     val activityMode: String,
     val accepted: Boolean,
     val rejectionReason: String?,
@@ -78,13 +78,13 @@ internal data class DiagnosticSampleCell(
     }
 }
 
-internal data class InspectionRecordingSession(
+internal data class InspectionRecording(
     val id: Long,
     val startedAtMillis: Long,
     val endedAtMillis: Long?,
 )
 
-internal data class InspectionManualRouteClaim(
+internal data class InspectionDrawnRoute(
     val id: Long,
     val createdAtMillis: Long,
     val cells: List<CoverageCellShape>,
@@ -99,10 +99,10 @@ internal data class TrackingInspectionMeasurements(
 internal data class TrackingInspectionSnapshot(
     val filter: TrackingInspectionFilter,
     val availableScopes: List<TrackingInspectionScope>,
-    val availableRecordingSessions: List<InspectionRecordingSession>,
+    val availableRecordings: List<InspectionRecording>,
     val cells: List<DiagnosticSampleCell>,
     val measurements: TrackingInspectionMeasurements,
-    val manualRouteClaims: List<InspectionManualRouteClaim> = emptyList(),
+    val drawnRoutes: List<InspectionDrawnRoute> = emptyList(),
 ) {
     fun cellsIntersecting(viewport: GeoBounds): List<DiagnosticSampleCell> = cells.filter { cell ->
         GeoBounds.containing(cell.boundary).intersects(viewport)

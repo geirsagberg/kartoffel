@@ -29,29 +29,29 @@ internal interface LocationSampleDao {
     suspend fun inspectionAll(startMillis: Long, endMillis: Long): List<LocationSampleEntity>
 
     @Query(
-        "SELECT * FROM location_samples WHERE source = 'passive_tracking' " +
+        "SELECT * FROM location_samples WHERE source = 'automatic_tracking' " +
             "AND captured_at_ms >= :startMillis AND captured_at_ms < :endMillis " +
             "ORDER BY captured_at_ms, id",
     )
-    suspend fun inspectionPassive(startMillis: Long, endMillis: Long): List<LocationSampleEntity>
+    suspend fun inspectionAutomatic(startMillis: Long, endMillis: Long): List<LocationSampleEntity>
 
     @Query(
-        "SELECT * FROM location_samples WHERE recording_session_id IS NOT NULL " +
+        "SELECT * FROM location_samples WHERE recording_id IS NOT NULL " +
             "AND captured_at_ms >= :startMillis AND captured_at_ms < :endMillis " +
             "ORDER BY captured_at_ms, id",
     )
-    suspend fun inspectionRecordingSessions(
+    suspend fun inspectionRecordings(
         startMillis: Long,
         endMillis: Long,
     ): List<LocationSampleEntity>
 
     @Query(
-        "SELECT * FROM location_samples WHERE recording_session_id = :sessionId " +
+        "SELECT * FROM location_samples WHERE recording_id = :recordingId " +
             "AND captured_at_ms >= :startMillis AND captured_at_ms < :endMillis " +
             "ORDER BY captured_at_ms, id",
     )
-    suspend fun inspectionRecordingSession(
-        sessionId: Long,
+    suspend fun inspectionRecording(
+        recordingId: Long,
         startMillis: Long,
         endMillis: Long,
     ): List<LocationSampleEntity>
@@ -60,11 +60,11 @@ internal interface LocationSampleDao {
         """
         SELECT activity_mode, COUNT(*) AS fix_count
         FROM location_samples
-        WHERE recording_session_id = :sessionId
+        WHERE recording_id = :recordingId
         GROUP BY activity_mode
         """,
     )
-    suspend fun activityModeFixCounts(sessionId: Long): List<ActivityModeFixCount>
+    suspend fun activityModeFixCounts(recordingId: Long): List<ActivityModeFixCount>
 
     @Query(
         """
