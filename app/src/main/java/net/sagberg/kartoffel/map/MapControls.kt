@@ -106,7 +106,7 @@ internal fun MapContent(
     onInspectionFilterChange: (TrackingInspectionFilter) -> Unit = {},
     onInspectionSortChange: (SampleSort) -> Unit = {},
     selectedDrawnRouteId: Long? = null,
-    onSelectDrawnRoute: (Long) -> Unit = {},
+    onSelectDrawnRoute: (Long?) -> Unit = {},
     onRemoveDrawnRoute: (Long) -> Unit = {},
     manualDrawingActive: Boolean = false,
     drawnRouteSaving: Boolean = false,
@@ -119,6 +119,7 @@ internal fun MapContent(
     onConfirmDrawnRoute: () -> Unit = {},
     map: @Composable BoxScope.(DrawnRouteMapInteractions, PaddingValues) -> Unit,
 ) {
+    var showDebugInfo by rememberSaveable { mutableStateOf(false) }
     var topOverlayHeight by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
@@ -192,6 +193,8 @@ internal fun MapContent(
         ) {
             FloatingMapBar(
                 menuActions = menuActions,
+                showDebugInfo = showDebugInfo,
+                onToggleDebugInfo = { showDebugInfo = !showDebugInfo },
                 isRecording = isRecording,
                 isAutomaticTrackingEnabled = isAutomaticTrackingEnabled,
                 onEnableAutomaticTracking = onEnableAutomaticTracking,
@@ -216,7 +219,9 @@ internal fun MapContent(
                 }
             }
 
-            if (!inspectionActive && !manualDrawingActive && liveTrackingDiagnostics.trackingActive) {
+            if (showDebugInfo && !inspectionActive && !manualDrawingActive &&
+                liveTrackingDiagnostics.trackingActive
+            ) {
                 LiveTrackingDiagnosticsPanel(
                     diagnostics = liveTrackingDiagnostics,
                     nowMillis = diagnosticsNowMillis,
@@ -529,6 +534,8 @@ private fun LatestFixDiagnostics?.displayDecision(): String {
 /** The floating, rounded bar over the Map holding its title and actions. */
 @Composable
 private fun FloatingMapBar(
+    showDebugInfo: Boolean,
+    onToggleDebugInfo: () -> Unit,
     menuActions: MapMenuActions,
     isRecording: Boolean,
     isAutomaticTrackingEnabled: Boolean,
@@ -659,6 +666,13 @@ private fun FloatingMapBar(
                                 }
                             },
                             enabled = !isRecording || isAutomaticTrackingEnabled,
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (showDebugInfo) "Hide debug info" else "Show debug info") },
+                            onClick = {
+                                menuExpanded = false
+                                onToggleDebugInfo()
+                            },
                         )
                         DropdownMenuItem(
                             text = { Text("Tracking diagnostics") },

@@ -56,7 +56,7 @@ internal fun TrackingInspectionControls(
     onFilterChange: (TrackingInspectionFilter) -> Unit,
     drawnRoutes: List<InspectionDrawnRoute> = emptyList(),
     selectedDrawnRouteId: Long? = null,
-    onSelectDrawnRoute: (Long) -> Unit = {},
+    onSelectDrawnRoute: (Long?) -> Unit = {},
     onRemoveDrawnRoute: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -244,40 +244,38 @@ internal fun TrackingInspectionControls(
                 ) {
                     itemsIndexed(drawnRoutes, key = { _, route -> route.id }) { index, route ->
                         if (index > 0) HorizontalDivider()
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp)
+                                .padding(vertical = 2.dp)
                                 .testTag("drawn_route_${route.id}"),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                "Drawn route · ${route.createdAtMillis.compactTime()}",
-                                modifier = Modifier.fillMaxWidth(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Drawn route", maxLines = 1)
+                                Text(
+                                    route.createdAtMillis.compactTime(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            TextButton(onClick = {
+                                onSelectDrawnRoute(
+                                    route.id.takeUnless { selectedDrawnRouteId == it },
+                                )
+                            }) {
+                                Text(
+                                    if (selectedDrawnRouteId == route.id) "Hide" else "Show",
+                                    maxLines = 1,
+                                )
+                            }
+                            TextButton(
+                                modifier = Modifier.testTag("remove_drawn_route_${route.id}"),
+                                onClick = { pendingRemoval = route },
                             ) {
-                                TextButton(onClick = { onSelectDrawnRoute(route.id) }) {
-                                    Text(
-                                        if (selectedDrawnRouteId == route.id) {
-                                            "Previewing"
-                                        } else {
-                                            "Preview"
-                                        },
-                                        maxLines = 1,
-                                    )
-                                }
-                                TextButton(
-                                    modifier = Modifier.testTag(
-                                        "remove_drawn_route_${route.id}",
-                                    ),
-                                    onClick = { pendingRemoval = route },
-                                ) {
-                                    Text("Remove", maxLines = 1)
-                                }
+                                Text("Remove", maxLines = 1)
                             }
                         }
                     }

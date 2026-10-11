@@ -538,6 +538,8 @@ private fun MapRoute(
                             GeoCoordinate(point.latitude, point.longitude),
                         )
                     }
+                } else if (inspectionActive) {
+                    { selectedInspectionCellId = null }
                 } else {
                     null
                 },
@@ -567,7 +569,11 @@ private fun MapRoute(
                             },
                             strokeWidth = if (cell.cellId == selectedInspectionCellId) 9f else 3f,
                             zIndex = if (cell.cellId == selectedInspectionCellId) 21f else 20f,
-                            onClick = { selectedInspectionCellId = cell.cellId },
+                            onClick = {
+                                selectedInspectionCellId = cell.cellId.takeUnless {
+                                    selectedInspectionCellId == it
+                                }
+                            },
                             clickable = true,
                         )
                     }
