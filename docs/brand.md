@@ -11,6 +11,8 @@ The app uses **Trailhead**, a map-friendly palette that avoids the generic purpl
 
 The Compose theme derives accessible light and dark Material roles from the same direction. Colors must be consumed through `MaterialTheme.colorScheme`; pair each container role with its corresponding `on…` role.
 
+Run `bash scripts/check-brand-colors.sh` to check for direct `Color(...)` constructors and named palette colours outside `ui/theme/` in `app/src/main`. CI runs this check along with unit tests, lint and a debug build. The check is a text search, so it also matches comments; transparent and unspecified colours are allowed.
+
 Other viable future directions are **Cartographic** (deep blue, turquoise, coral) and **Expedition** (burnt orange, pine, sky blue). Trailhead is preferred because it remains distinctive over Google Maps without competing with map labels and markers.
 
 ## Icon

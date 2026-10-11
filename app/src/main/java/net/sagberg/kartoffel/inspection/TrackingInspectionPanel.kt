@@ -431,10 +431,11 @@ internal fun TrackingInspectionDetails(
 }
 
 internal val DiagnosticCellState.color: Color
+    @Composable
     get() = when (this) {
-        DiagnosticCellState.Observed -> Color(0xFF147D3F)
-        DiagnosticCellState.Inferred -> Color(0xFF5B4ACB)
-        DiagnosticCellState.RejectedOnly -> Color(0xFFB3261E)
+        DiagnosticCellState.Observed -> MaterialTheme.colorScheme.primary
+        DiagnosticCellState.Inferred -> MaterialTheme.colorScheme.tertiary
+        DiagnosticCellState.RejectedOnly -> MaterialTheme.colorScheme.error
     }
 
 private val localDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
