@@ -45,7 +45,7 @@ class DrawnRouteFogIntegrationTest {
         val preview = RouteDrawing(h3).recompute(
             listOf(
                 GeoCoordinate(59.9109, 10.7522),
-                GeoCoordinate(59.9119, 10.7552),
+                GeoCoordinate(59.9139, 10.7612),
             ),
         )
         val routeCells = preview.cells.map { it.value }.toSet()

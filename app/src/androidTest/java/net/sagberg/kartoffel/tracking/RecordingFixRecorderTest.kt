@@ -159,7 +159,7 @@ class RecordingFixRecorderTest {
         val settings = RoomCoverageSettings(database.coverageSettings())
         val recordingId = recorder.start(startedAtMillis = 1_000)
         val start = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
-        val destination = GeoCoordinate(latitude = 59.910527, longitude = 10.751046)
+        val destination = GeoCoordinate(latitude = 59.910390, longitude = 10.750500)
 
         settings.setMaximumInterpolationDistanceSteps(1)
         recorder.record(
@@ -181,7 +181,7 @@ class RecordingFixRecorderTest {
         val cells = database.coverageCells().all()
         assertEquals(3, cells.size)
         assertTrue(
-            cells.filter { it.cellId in setOf(626169207098265599, 626169207099809791) }
+            cells.filter { it.cellId in setOf(621665607470907391, 621665607472578559) }
                 .all {
                     it.evidenceMask == evidenceMaskOf(
                         CoverageEvidenceSource.RECORDING,
@@ -189,7 +189,7 @@ class RecordingFixRecorderTest {
                 },
         )
         val inferredCell = cells.single {
-            it.cellId !in setOf(626169207098265599, 626169207099809791)
+            it.cellId !in setOf(621665607470907391, 621665607472578559)
         }
         assertEquals(
             inferredEvidenceMaskOf(CoverageEvidenceSource.RECORDING),
@@ -204,7 +204,7 @@ class RecordingFixRecorderTest {
     fun rejectedFixDoesNotCreateInterpolatedCoverage() = runBlocking {
         val recordingId = recorder.start(startedAtMillis = 1_000)
         val start = GeoCoordinate(latitude = 59.9109, longitude = 10.7522)
-        val destination = GeoCoordinate(latitude = 59.910527, longitude = 10.751046)
+        val destination = GeoCoordinate(latitude = 59.910390, longitude = 10.750500)
 
         recorder.record(
             recordingId,
@@ -220,7 +220,7 @@ class RecordingFixRecorderTest {
         )
 
         assertEquals(
-            setOf(626169207098265599),
+            setOf(621665607470907391),
             database.coverageCells().all().map { it.cellId }.toSet(),
         )
         assertEquals(2, database.locationSamples().between(0, 4_000).size)

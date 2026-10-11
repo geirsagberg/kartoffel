@@ -106,7 +106,7 @@ class AutomaticTrackingRecorderTest {
         )
         recorder.record(
             RecordingLocationFix(
-                GeoCoordinate(59.910527, 10.751046),
+                GeoCoordinate(59.910390, 10.750500),
                 capturedAtMillis = 62_000,
                 accuracyMeters = 8.0,
             ),
