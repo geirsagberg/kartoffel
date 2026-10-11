@@ -16,6 +16,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -270,6 +273,9 @@ private fun InspectionLegend() {
     }
 }
 
+private enum class InspectionTab { Info, Samples, Routes }
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TrackingInspectionDetails(
     cell: DiagnosticSampleCell?,
@@ -280,9 +286,14 @@ internal fun TrackingInspectionDetails(
     onRemoveDrawnRoute: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var historyExpanded by rememberSaveable(cellId) { mutableStateOf(false) }
-    var routesExpanded by remember(cellId) { mutableStateOf(false) }
+    var selectedTab by rememberSaveable(cellId) { mutableStateOf(InspectionTab.Info) }
     var pendingRemoval by remember(cellId) { mutableStateOf<InspectionDrawnRoute?>(null) }
+    val tabs = buildList {
+        add(InspectionTab.Info)
+        if (!cell?.samples.isNullOrEmpty()) add(InspectionTab.Samples)
+        if (drawnRoutes.isNotEmpty()) add(InspectionTab.Routes)
+    }
+    val activeTab = selectedTab.takeIf { it in tabs } ?: InspectionTab.Info
 
     pendingRemoval?.let { route ->
         AlertDialog(
@@ -293,145 +304,142 @@ internal fun TrackingInspectionDetails(
                 TextButton(onClick = { pendingRemoval = null }) { Text("Cancel") }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    pendingRemoval = null
-                    onRemoveDrawnRoute(route.id)
-                }) { Text("Remove") }
-            },
-        )
-    }
-
-    if (routesExpanded && drawnRoutes.isNotEmpty() && pendingRemoval == null) {
-        AlertDialog(
-            onDismissRequest = { routesExpanded = false },
-            title = { Text("Routes (${drawnRoutes.size})") },
-            text = {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 220.dp)
-                        .testTag("drawn_route_list"),
-                ) {
-                    itemsIndexed(drawnRoutes, key = { _, route -> route.id }) { index, route ->
-                        if (index > 0) HorizontalDivider()
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
-                                .testTag("drawn_route_${route.id}"),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Drawn route", maxLines = 1)
-                                Text(
-                                    route.createdAtMillis.compactTime(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            TextButton(
-                                modifier = Modifier.testTag("remove_drawn_route_${route.id}"),
-                                onClick = { pendingRemoval = route },
-                            ) {
-                                Text("Remove", maxLines = 1)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { routesExpanded = false }) { Text("Close") }
+                TextButton(
+                    modifier = Modifier.testTag("confirm_remove_drawn_route"),
+                    onClick = {
+                        pendingRemoval = null
+                        onRemoveDrawnRoute(route.id)
+                    },
+                ) { Text("Remove") }
             },
         )
     }
 
     Card(modifier = modifier.testTag("inspection_cell_details")) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (drawnRoutes.isNotEmpty()) {
-                TextButton(onClick = { routesExpanded = true }) {
-                    Text("Routes (${drawnRoutes.size})")
-                }
-            }
-            if (cell == null) {
-                Text("Drawn Coverage Evidence")
-                return@Column
-            }
-            Text(
-                cell.state.label,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "Diagnostic Sample Cell …${cell.cellId.toString(16).takeLast(6)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "${cell.samples.size} total · ${cell.acceptedCount} accepted · " +
-                    "${cell.rejectedCount} rejected · ${cell.provenance.displayName}",
-            )
-            Text("${cell.coverageEvidenceLabel} · ${cell.displayTimeSpan}")
-            HorizontalDivider()
-
-            if (cell.samples.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { historyExpanded = !historyExpanded }) {
-                        Text(if (historyExpanded) "Hide samples" else "Samples (${cell.samples.size})")
-                    }
-                    if (historyExpanded) {
-                        TextButton(
-                            modifier = Modifier.testTag("inspection_sort"),
-                            onClick = {
-                                onSortChange(
-                                    if (sort == SampleSort.NewestFirst) {
-                                        SampleSort.OldestFirst
-                                    } else {
-                                        SampleSort.NewestFirst
-                                    },
-                                )
-                            },
-                        ) {
+        Column {
+            PrimaryTabRow(selectedTabIndex = tabs.indexOf(activeTab)) {
+                tabs.forEach { tab ->
+                    Tab(
+                        selected = tab == activeTab,
+                        onClick = { selectedTab = tab },
+                        text = {
                             Text(
-                                if (sort == SampleSort.NewestFirst) {
-                                    "Newest first"
-                                } else {
-                                    "Oldest first"
+                                when (tab) {
+                                    InspectionTab.Info -> "Info"
+                                    InspectionTab.Samples -> "Samples (${cell?.samples?.size ?: 0})"
+                                    InspectionTab.Routes -> "Routes (${drawnRoutes.size})"
                                 },
                             )
-                        }
-                    }
+                        },
+                    )
                 }
-                if (historyExpanded) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 220.dp)
-                            .testTag("sample_history"),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        items(cell.samples(sort), key = DiagnosticSample::id) { sample ->
-                            Text(
-                                sample.displayName,
-                                modifier = Modifier.fillMaxWidth(),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
+            }
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                when (activeTab) {
+                    InspectionTab.Info -> InspectionCellInfo(cell)
+                    InspectionTab.Samples -> InspectionSamples(requireNotNull(cell), sort, onSortChange)
+                    InspectionTab.Routes -> InspectionRoutes(drawnRoutes) { pendingRemoval = it }
                 }
-            } else {
-                Text(
-                    "Inferred Coverage Evidence; no Location Samples",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InspectionCellInfo(cell: DiagnosticSampleCell?) {
+    if (cell == null) {
+        Text("Drawn Coverage Evidence")
+    } else {
+        Text(
+            cell.state.label,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            "Diagnostic Sample Cell …${cell.cellId.toString(16).takeLast(6)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "${cell.samples.size} total · ${cell.acceptedCount} accepted · " +
+                "${cell.rejectedCount} rejected · ${cell.provenance.displayName}",
+        )
+        Text("${cell.coverageEvidenceLabel} · ${cell.displayTimeSpan}")
+    }
+}
+
+@Composable
+private fun InspectionSamples(
+    cell: DiagnosticSampleCell,
+    sort: SampleSort,
+    onSortChange: (SampleSort) -> Unit,
+) {
+    TextButton(
+        modifier = Modifier.testTag("inspection_sort"),
+        onClick = {
+            onSortChange(
+                if (sort == SampleSort.NewestFirst) SampleSort.OldestFirst else SampleSort.NewestFirst,
+            )
+        },
+    ) {
+        Text(if (sort == SampleSort.NewestFirst) "Newest first" else "Oldest first")
+    }
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 220.dp)
+            .testTag("sample_history"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        items(cell.samples(sort), key = DiagnosticSample::id) { sample ->
+            Text(
+                sample.displayName,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun InspectionRoutes(
+    drawnRoutes: List<InspectionDrawnRoute>,
+    onRemove: (InspectionDrawnRoute) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 220.dp)
+            .testTag("drawn_route_list"),
+    ) {
+        itemsIndexed(drawnRoutes, key = { _, route -> route.id }) { index, route ->
+            if (index > 0) HorizontalDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp)
+                    .testTag("drawn_route_${route.id}"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Drawn route", maxLines = 1)
+                    Text(
+                        route.createdAtMillis.compactTime(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                TextButton(
+                    modifier = Modifier.testTag("remove_drawn_route_${route.id}"),
+                    onClick = { onRemove(route) },
+                ) {
+                    Text("Remove", maxLines = 1)
+                }
             }
         }
     }

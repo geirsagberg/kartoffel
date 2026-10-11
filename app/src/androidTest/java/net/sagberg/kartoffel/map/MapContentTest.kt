@@ -50,6 +50,7 @@ import net.sagberg.kartoffel.inspection.DiagnosticSampleCell
 import net.sagberg.kartoffel.inspection.TrackingInspectionFilter
 import net.sagberg.kartoffel.inspection.TrackingInspectionMeasurements
 import net.sagberg.kartoffel.inspection.TrackingInspectionSnapshot
+import net.sagberg.kartoffel.inspection.SampleSort
 import net.sagberg.kartoffel.inspection.InspectionDrawnRoute
 import net.sagberg.kartoffel.tracking.RecordingActivity
 import org.junit.Rule
@@ -484,6 +485,8 @@ class MapContentTest {
         compose.onAllNodesWithTag("drawn_route_list").assertCountEquals(0)
         compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
         compose.runOnIdle { selectedCell.value = 123 }
+        compose.onAllNodesWithText("Samples", substring = true).assertCountEquals(0)
+        compose.onNodeWithText("Drawn Coverage Evidence").assertIsDisplayed()
         compose.onNodeWithText("Routes (2)").performClick()
         compose.onNodeWithTag("drawn_route_7").assertIsDisplayed()
         compose.onNodeWithTag("drawn_route_8").assertIsDisplayed()
@@ -495,12 +498,15 @@ class MapContentTest {
         compose.onNodeWithText("Cancel").performClick()
         compose.runOnIdle { assertEquals(null, removed) }
         compose.onNodeWithTag("remove_drawn_route_7").performClick()
-        compose.onNodeWithText("Remove").performClick()
+        compose.onNodeWithTag("confirm_remove_drawn_route").performClick()
         compose.runOnIdle { assertEquals(7L, removed) }
         compose.onAllNodesWithTag("drawn_route_7").assertCountEquals(0)
         compose.onNodeWithTag("drawn_route_8").assertIsDisplayed()
-        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithText("Routes (1)").assertIsDisplayed()
+        compose.onNodeWithTag("remove_drawn_route_8").performClick()
+        compose.onNodeWithTag("confirm_remove_drawn_route").performClick()
+        compose.runOnIdle { assertEquals(8L, removed) }
+        compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
         compose.runOnIdle { selectedCell.value = 789 }
         compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
     }
@@ -540,7 +546,7 @@ class MapContentTest {
     }
 
     @Test
-    fun selectedInspectionCellShowsSummaryAndExpandableLosslessHistory() {
+    fun selectedInspectionCellSeparatesInfoAndSamplesIntoTabs() {
         val cell = DiagnosticSampleCell(
             cellId = 123,
             boundary = listOf(
@@ -571,20 +577,53 @@ class MapContentTest {
             cells = listOf(cell),
             measurements = TrackingInspectionMeasurements(1, 2, 3),
         )
-        compose.setMapContent(
-            hasLocationPermission = true,
-            inspectionActive = true,
-            inspectionSnapshot = snapshot,
-            selectedInspectionCellId = cell.cellId,
-        )
+        val routes = mutableStateOf<List<InspectionDrawnRoute>>(emptyList())
+        val sort = mutableStateOf(SampleSort.NewestFirst)
+        compose.setContent {
+            MaterialTheme {
+                MapContent(
+                    hasLocationPermission = true,
+                    isRecording = false,
+                    onRequestLocationPermission = {},
+                    onStartRecording = {},
+                    onStopRecording = {},
+                    onCenterCurrentLocation = {},
+                    inspectionActive = true,
+                    inspectionSnapshot = snapshot.copy(drawnRoutes = routes.value),
+                    selectedInspectionCellId = cell.cellId,
+                    inspectionSort = sort.value,
+                    onInspectionSortChange = { sort.value = it },
+                    onRemoveDrawnRoute = { routes.value = emptyList() },
+                    map = { _, _ -> },
+                )
+            }
+        }
 
         compose.onAllNodesWithText("Observed").assertCountEquals(2)
         compose.onNodeWithText("2 total · 1 accepted · 1 rejected · Automatic").assertIsDisplayed()
         compose.onAllNodesWithText("Accepted", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
         compose.onNodeWithText("Samples (2)").performClick()
         compose.onNodeWithText("Accepted · 8 m", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Rejected · 12 m", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Newest first").assertIsDisplayed()
+        compose.onNodeWithText("Newest first").performClick()
+        compose.onNodeWithText("Oldest first").assertIsDisplayed()
+        compose.onAllNodesWithText("2 total", substring = true).assertCountEquals(0)
+        compose.onNodeWithText("Info").performClick()
+        compose.onAllNodesWithTag("sample_history").assertCountEquals(0)
+        compose.onNodeWithText("2 total · 1 accepted · 1 rejected · Automatic").assertIsDisplayed()
+        compose.runOnIdle {
+            routes.value = listOf(
+                InspectionDrawnRoute(7, 1_000, listOf(CoverageCellShape("123", cell.boundary))),
+            )
+        }
+        compose.onNodeWithText("Routes (1)").performClick()
+        compose.onAllNodesWithTag("sample_history").assertCountEquals(0)
+        compose.onNodeWithTag("remove_drawn_route_7").performClick()
+        compose.onNodeWithTag("confirm_remove_drawn_route").performClick()
+        compose.onAllNodesWithText("Routes", substring = true).assertCountEquals(0)
+        compose.onNodeWithText("2 total · 1 accepted · 1 rejected · Automatic").assertIsDisplayed()
+        compose.onNodeWithText("Samples (2)").assertIsDisplayed()
     }
 
     @Test
