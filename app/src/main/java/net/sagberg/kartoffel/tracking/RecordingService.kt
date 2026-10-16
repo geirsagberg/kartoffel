@@ -132,7 +132,7 @@ internal class RecordingService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
-            "Recording",
+            "Trip tracking",
             NotificationManager.IMPORTANCE_LOW,
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
@@ -158,11 +158,11 @@ internal class RecordingService : Service() {
         )
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_my_location_24)
-            .setContentTitle("Recording")
-            .setContentText("Kartoffel is recording your route")
+            .setContentTitle("Tracking trip")
+            .setContentText("Kartoffel is tracking your route")
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
-            .addAction(Notification.Action.Builder(null, "Stop", stopPendingIntent).build())
+            .addAction(Notification.Action.Builder(null, "End trip", stopPendingIntent).build())
             .build()
     }
 

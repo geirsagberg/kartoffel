@@ -397,8 +397,8 @@ private fun RecordButton(
             Text(
                 text = when {
                     !hasLocationPermission -> "Enable location"
-                    isRecording -> "Stop"
-                    else -> "Record"
+                    isRecording -> "End trip"
+                    else -> "Track trip"
                 },
                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                 fontWeight = FontWeight.SemiBold,
@@ -407,25 +407,18 @@ private fun RecordButton(
     )
 }
 
-/** A record dot or stop square using the theme’s error and onError colour pair. */
+/** A play or stop symbol for deliberate trip tracking. */
 @Composable
 private fun RecordingGlyph(isRecording: Boolean) {
-    Box(
+    Icon(
+        painter = painterResource(
+            if (isRecording) R.drawable.ic_stop_24 else R.drawable.ic_play_arrow_24,
+        ),
+        contentDescription = null,
         modifier = Modifier
-            .size(26.dp)
-            .background(MaterialTheme.colorScheme.onError, CircleShape)
+            .size(24.dp)
             .testTag(if (isRecording) "stop_recording_icon" else "start_recording_icon"),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .size(if (isRecording) 10.dp else 12.dp)
-                .background(
-                    MaterialTheme.colorScheme.error,
-                    if (isRecording) RoundedCornerShape(2.dp) else CircleShape,
-                ),
-        )
-    }
+    )
 }
 
 
