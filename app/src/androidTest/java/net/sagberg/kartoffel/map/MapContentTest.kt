@@ -250,7 +250,7 @@ class MapContentTest {
         compose.onAllNodesWithContentDescription("Draw route").assertCountEquals(0)
         compose.onNodeWithText("Undo").assertIsNotEnabled()
         compose.onNodeWithText("Confirm").assertIsNotEnabled()
-        compose.onNodeWithText("Stop", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("End trip", useUnmergedTree = true).assertIsDisplayed()
 
         compose.onNodeWithTag("fake_map_tap").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
@@ -288,7 +288,7 @@ class MapContentTest {
         compose.onNodeWithContentDescription("Draw route").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
         compose.onNodeWithTag("fake_map_tap").performClick()
-        compose.onNodeWithText("Stop", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("End trip", useUnmergedTree = true).performClick()
         compose.runOnIdle { assertEquals(true, stoppedRecording) }
         compose.onNodeWithText("Confirm").performClick()
         compose.runOnIdle { assertEquals(true, confirmed) }
@@ -459,12 +459,12 @@ class MapContentTest {
             }
         }
 
-        compose.onNodeWithText("Record", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Track trip", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("start_recording_icon", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("recording_control").performClick()
         compose.runOnIdle { assertEquals(true, requestedRecording.value) }
         compose.onNodeWithTag("stop_recording_icon", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Stop", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("End trip", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("recording_control").performClick()
         compose.runOnIdle { assertEquals(false, requestedRecording.value) }
     }
